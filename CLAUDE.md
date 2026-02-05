@@ -14,7 +14,7 @@ CleanBag is a food delivery bag cleaning marketplace for Cyprus. This is the pro
 - **Styling**: Tailwind CSS v4 (CSS-based config in `globals.css`)
 - **Database**: Supabase (Postgres + Auth + Realtime)
 - **Package Manager**: pnpm
-- **Deployment**: Vercel (planned)
+- **Deployment**: Vercel ([cleanbag.io](https://cleanbag.io))
 
 ## Quick Start
 ```bash
@@ -79,6 +79,17 @@ NEXT_PUBLIC_SUPABASE_URL=your-url
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY=your-key
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
+
+### Deployment Environments
+| Env | `NEXT_PUBLIC_SITE_URL` | Notes |
+|---|---|---|
+| Local | `http://localhost:3000` | In `.env.local` |
+| Vercel Production | `https://cleanbag.io` | Set in Vercel project settings |
+| Vercel Preview | `https://cleanbag-app.vercel.app` | Set in Vercel project settings (Preview scope) |
+
+### Supabase Auth URL Config
+- **Site URL**: `https://cleanbag.io`
+- **Redirect URLs**: `http://localhost:3000/**`, `https://cleanbag.io/**`, `https://*.vercel.app/**`
 
 ## Database Setup
 Run these SQL files in Supabase SQL Editor (in order):

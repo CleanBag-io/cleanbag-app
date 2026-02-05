@@ -1,0 +1,89 @@
+@import "tailwindcss";
+
+/* CleanBag Design Tokens */
+:root {
+  /* Background Colors */
+  --background: #f9fafb;
+  --foreground: #111827;
+
+  /* Primary Colors (Brand Pink) */
+  --brand-pink: #eb2573;
+  --brand-pink-hover: #c91d5f;
+  --brand-pink-light: #fce7f3;
+  --brand-pink-dark: #9f1853;
+
+  /* Trust Blue */
+  --trust-blue: #0ea5e9;
+  --trust-blue-hover: #0284c7;
+  --trust-blue-light: #e0f2fe;
+  --trust-blue-dark: #0369a1;
+
+  /* Status Colors */
+  --status-completed: #10b981;
+  --status-pending: #f59e0b;
+  --status-in-progress: #0ea5e9;
+  --status-overdue: #ef4444;
+  --status-cancelled: #6b7280;
+
+  /* Semantic Colors */
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-info: #0ea5e9;
+
+  /* Layout */
+  --sidebar-width: 260px;
+  --header-height: 64px;
+  --nav-bottom-height: 64px;
+}
+
+@theme inline {
+  /* Background & Foreground */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  /* Brand Colors */
+  --color-brand-pink: var(--brand-pink);
+  --color-brand-pink-hover: var(--brand-pink-hover);
+  --color-brand-pink-light: var(--brand-pink-light);
+  --color-brand-pink-dark: var(--brand-pink-dark);
+
+  /* Trust Blue */
+  --color-trust-blue: var(--trust-blue);
+  --color-trust-blue-hover: var(--trust-blue-hover);
+  --color-trust-blue-light: var(--trust-blue-light);
+  --color-trust-blue-dark: var(--trust-blue-dark);
+
+  /* Status Colors */
+  --color-status-completed: var(--status-completed);
+  --color-status-pending: var(--status-pending);
+  --color-status-in-progress: var(--status-in-progress);
+  --color-status-overdue: var(--status-overdue);
+  --color-status-cancelled: var(--status-cancelled);
+
+  /* Semantic Colors */
+  --color-success: var(--color-success);
+  --color-warning: var(--color-warning);
+  --color-error: var(--color-error);
+  --color-info: var(--color-info);
+
+  /* Spacing for sidebar */
+  --spacing-sidebar: var(--sidebar-width);
+
+  /* Font */
+  --font-sans: var(--font-inter), system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+/* Utility class for sidebar offset */
+.md\:pl-sidebar {
+  @media (min-width: 768px) {
+    padding-left: var(--sidebar-width);
+  }
+}

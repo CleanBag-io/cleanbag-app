@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2424 1024">
+  <defs>
+    <style>
+      .cls-1, .cls-2 {
+        fill: #eb2573;
+      }
+
+      .cls-2 {
+        font-family: Avenir-Black, Avenir;
+        font-size: 512px;
+        font-weight: 800;
+      }
+    </style>
+  </defs>
+  <g>
+    <path class="cls-1" d="M844.6,1024H179.4C80.32,1024,0,943.68,0,844.6V179.4C0,80.32,80.32,0,179.4,0h665.21C943.68,0,1024,80.32,1024,179.4v665.21c0,99.08-80.32,179.4-179.4,179.4ZM208.83,912.35h606.34c53.67,0,97.18-43.51,97.18-97.18V208.83c0-53.67-43.51-97.18-97.18-97.18H208.83c-53.67,0-97.18,43.51-97.18,97.18v606.34c0,53.67,43.51,97.18,97.18,97.18Z"/>
+    <polygon class="cls-1" points="442.78 754.06 215.54 526.82 294.49 447.87 442.78 596.16 729.51 309.42 808.46 388.37 442.78 754.06"/>
+  </g>
+  <text class="cls-2" transform="translate(1077.46 387.66)"><tspan x="0" y="0">Clean</tspan><tspan x="0" y="512">Bag</tspan></text>
+</svg>

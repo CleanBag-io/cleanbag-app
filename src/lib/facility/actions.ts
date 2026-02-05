@@ -1,0 +1,613 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
+import type { Facility, Order, Driver, Profile } from "@/types";
+import type { OrderStatus } from "@/config/constants";
+
+export type ActionResult<T = void> = {
+  error?: string;
+  data?: T;
+};
+
+// Create a new facility (onboarding)
+export async function createFacility(formData: FormData): Promise<ActionResult> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  const name = formData.get("name") as string;
+  const address = formData.get("address") as string;
+  const city = formData.get("city") as string;
+  const phone = formData.get("phone") as string;
+
+  if (!name || !address || !city) {
+    return { error: "Name, address, and city are required" };
+  }
+
+  // Check if facility already exists
+  const { data: existing } = await supabase
+    .from("facilities")
+    .select("id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (existing) {
+    return { error: "Facility already exists" };
+  }
+
+  // Create facility with default services
+  const defaultServices = [
+    { type: "standard", price: 6.5, duration: 20 },
+    { type: "express", price: 8.5, duration: 10 },
+    { type: "deep", price: 10.0, duration: 30 },
+  ];
+
+  const { error } = await supabase.from("facilities").insert({
+    user_id: user.id,
+    name,
+    address,
+    city,
+    phone: phone || null,
+    services: defaultServices,
+    commission_rate: 0.15,
+    is_active: true,
+    rating: 0,
+    total_orders: 0,
+  });
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  // Update profile role to facility
+  await supabase
+    .from("profiles")
+    .update({ role: "facility" })
+    .eq("id", user.id);
+
+  revalidatePath("/facility", "layout");
+  return {};
+}
+
+// Get current facility profile
+export async function getCurrentFacility(): Promise<ActionResult<Facility | null>> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { data: null };
+  }
+
+  const { data: facility, error } = await supabase
+    .from("facilities")
+    .select("*")
+    .eq("user_id", user.id)
+    .single();
+
+  if (error && error.code !== "PGRST116") {
+    return { error: error.message };
+  }
+
+  return { data: facility || null };
+}
+
+// Get facility orders with driver info
+export async function getFacilityOrders(
+  status?: OrderStatus | "all"
+): Promise<ActionResult<(Order & { driver: Driver & { profile: Profile } })[]>> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  // Get facility ID
+  const { data: facility } = await supabase
+    .from("facilities")
+    .select("id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!facility) {
+    return { error: "Facility not found" };
+  }
+
+  let query = supabase
+    .from("orders")
+    .select(
+      `
+      *,
+      driver:drivers(
+        *,
+        profile:profiles(*)
+      )
+    `
+    )
+    .eq("facility_id", facility.id)
+    .order("created_at", { ascending: false });
+
+  if (status && status !== "all") {
+    query = query.eq("status", status);
+  }
+
+  const { data: orders, error } = await query;
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  return { data: orders || [] };
+}
+
+// Get single order by ID (for facility)
+export async function getFacilityOrder(
+  orderId: string
+): Promise<ActionResult<(Order & { driver: Driver & { profile: Profile } }) | null>> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  // Get facility ID
+  const { data: facility } = await supabase
+    .from("facilities")
+    .select("id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!facility) {
+    return { error: "Facility not found" };
+  }
+
+  const { data: order, error } = await supabase
+    .from("orders")
+    .select(
+      `
+      *,
+      driver:drivers(
+        *,
+        profile:profiles(*)
+      )
+    `
+    )
+    .eq("id", orderId)
+    .eq("facility_id", facility.id)
+    .single();
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  return { data: order };
+}
+
+// Accept an order
+export async function acceptOrder(orderId: string): Promise<ActionResult> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  // Get facility ID
+  const { data: facility } = await supabase
+    .from("facilities")
+    .select("id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!facility) {
+    return { error: "Facility not found" };
+  }
+
+  // Verify order belongs to this facility and is pending
+  const { data: order } = await supabase
+    .from("orders")
+    .select("status")
+    .eq("id", orderId)
+    .eq("facility_id", facility.id)
+    .single();
+
+  if (!order) {
+    return { error: "Order not found" };
+  }
+
+  if (order.status !== "pending") {
+    return { error: "Only pending orders can be accepted" };
+  }
+
+  const { error } = await supabase
+    .from("orders")
+    .update({
+      status: "accepted",
+      accepted_at: new Date().toISOString(),
+    })
+    .eq("id", orderId);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/facility", "layout");
+  return {};
+}
+
+// Start cleaning an order
+export async function startOrder(orderId: string): Promise<ActionResult> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  // Get facility ID
+  const { data: facility } = await supabase
+    .from("facilities")
+    .select("id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!facility) {
+    return { error: "Facility not found" };
+  }
+
+  // Verify order belongs to this facility and is accepted
+  const { data: order } = await supabase
+    .from("orders")
+    .select("status")
+    .eq("id", orderId)
+    .eq("facility_id", facility.id)
+    .single();
+
+  if (!order) {
+    return { error: "Order not found" };
+  }
+
+  if (order.status !== "accepted") {
+    return { error: "Only accepted orders can be started" };
+  }
+
+  const { error } = await supabase
+    .from("orders")
+    .update({
+      status: "in_progress",
+      started_at: new Date().toISOString(),
+    })
+    .eq("id", orderId);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/facility", "layout");
+  return {};
+}
+
+// Complete an order
+export async function completeOrder(orderId: string): Promise<ActionResult> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  // Get facility ID
+  const { data: facility } = await supabase
+    .from("facilities")
+    .select("id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!facility) {
+    return { error: "Facility not found" };
+  }
+
+  // Verify order belongs to this facility and is in progress
+  const { data: order } = await supabase
+    .from("orders")
+    .select("status, driver_id")
+    .eq("id", orderId)
+    .eq("facility_id", facility.id)
+    .single();
+
+  if (!order) {
+    return { error: "Order not found" };
+  }
+
+  if (order.status !== "in_progress") {
+    return { error: "Only in-progress orders can be completed" };
+  }
+
+  const now = new Date().toISOString();
+
+  // Update order status
+  const { error: orderError } = await supabase
+    .from("orders")
+    .update({
+      status: "completed",
+      completed_at: now,
+      payment_status: "paid", // In real app, this would be after Stripe payment
+    })
+    .eq("id", orderId);
+
+  if (orderError) {
+    return { error: orderError.message };
+  }
+
+  // Update driver's last cleaning date and total cleanings
+  const { error: driverError } = await supabase.rpc("increment_driver_cleanings", {
+    p_driver_id: order.driver_id,
+    p_cleaning_date: now,
+  });
+
+  // If RPC doesn't exist, do manual update
+  if (driverError) {
+    await supabase
+      .from("drivers")
+      .update({
+        last_cleaning_date: now,
+        total_cleanings: supabase.rpc("increment", { x: 1 }),
+      })
+      .eq("id", order.driver_id);
+  }
+
+  // Update facility total orders
+  await supabase
+    .from("facilities")
+    .update({
+      total_orders: facility.id, // This will be incremented by trigger
+    })
+    .eq("id", facility.id);
+
+  revalidatePath("/facility", "layout");
+  revalidatePath("/driver", "layout");
+  return {};
+}
+
+// Get facility statistics
+export async function getFacilityStats(): Promise<
+  ActionResult<{
+    todayOrders: number;
+    pendingOrders: number;
+    completedOrders: number;
+    todayRevenue: number;
+    totalRevenue: number;
+    averageRating: number;
+    totalOrders: number;
+  }>
+> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  // Get facility
+  const { data: facility } = await supabase
+    .from("facilities")
+    .select("id, rating, total_orders")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!facility) {
+    return { error: "Facility not found" };
+  }
+
+  // Get today's start (midnight)
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayISO = today.toISOString();
+
+  // Get today's orders
+  const { data: todayOrdersData } = await supabase
+    .from("orders")
+    .select("id, status, base_price, commission_amount")
+    .eq("facility_id", facility.id)
+    .gte("created_at", todayISO);
+
+  const todayOrders = todayOrdersData?.length || 0;
+
+  // Get pending orders count
+  const { count: pendingOrders } = await supabase
+    .from("orders")
+    .select("id", { count: "exact", head: true })
+    .eq("facility_id", facility.id)
+    .in("status", ["pending", "accepted", "in_progress"]);
+
+  // Get completed orders count
+  const { count: completedOrders } = await supabase
+    .from("orders")
+    .select("id", { count: "exact", head: true })
+    .eq("facility_id", facility.id)
+    .eq("status", "completed");
+
+  // Calculate today's revenue (base_price - commission for completed orders)
+  const todayRevenue =
+    todayOrdersData
+      ?.filter((o) => o.status === "completed")
+      .reduce((sum, o) => sum + (o.base_price - o.commission_amount), 0) || 0;
+
+  // Get total revenue from all completed orders
+  const { data: allCompletedOrders } = await supabase
+    .from("orders")
+    .select("base_price, commission_amount")
+    .eq("facility_id", facility.id)
+    .eq("status", "completed");
+
+  const totalRevenue =
+    allCompletedOrders?.reduce((sum, o) => sum + (o.base_price - o.commission_amount), 0) || 0;
+
+  return {
+    data: {
+      todayOrders,
+      pendingOrders: pendingOrders || 0,
+      completedOrders: completedOrders || 0,
+      todayRevenue,
+      totalRevenue,
+      averageRating: facility.rating,
+      totalOrders: facility.total_orders,
+    },
+  };
+}
+
+// Update facility profile
+export async function updateFacility(formData: FormData): Promise<ActionResult> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  const name = formData.get("name") as string;
+  const address = formData.get("address") as string;
+  const phone = formData.get("phone") as string;
+
+  if (!name || !address) {
+    return { error: "Name and address are required" };
+  }
+
+  const { error } = await supabase
+    .from("facilities")
+    .update({
+      name,
+      address,
+      phone: phone || null,
+    })
+    .eq("user_id", user.id);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/facility", "layout");
+  return {};
+}
+
+// Get revenue data for charts (last 7 days or 30 days)
+export async function getFacilityRevenue(
+  period: "week" | "month" = "week"
+): Promise<
+  ActionResult<{
+    dailyRevenue: { date: string; revenue: number; orders: number }[];
+    totalRevenue: number;
+    totalOrders: number;
+    averageOrderValue: number;
+  }>
+> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  // Get facility
+  const { data: facility } = await supabase
+    .from("facilities")
+    .select("id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!facility) {
+    return { error: "Facility not found" };
+  }
+
+  // Calculate date range
+  const days = period === "week" ? 7 : 30;
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days);
+  startDate.setHours(0, 0, 0, 0);
+
+  // Get completed orders in period
+  const { data: orders } = await supabase
+    .from("orders")
+    .select("completed_at, base_price, commission_amount")
+    .eq("facility_id", facility.id)
+    .eq("status", "completed")
+    .gte("completed_at", startDate.toISOString())
+    .order("completed_at", { ascending: true });
+
+  // Group by day
+  const dailyMap = new Map<string, { revenue: number; orders: number }>();
+
+  // Initialize all days with zero
+  for (let i = 0; i < days; i++) {
+    const date = new Date();
+    date.setDate(date.getDate() - (days - 1 - i));
+    const dateStr = date.toISOString().split("T")[0];
+    dailyMap.set(dateStr, { revenue: 0, orders: 0 });
+  }
+
+  // Fill in actual data
+  orders?.forEach((order) => {
+    if (order.completed_at) {
+      const dateStr = order.completed_at.split("T")[0];
+      const existing = dailyMap.get(dateStr) || { revenue: 0, orders: 0 };
+      dailyMap.set(dateStr, {
+        revenue: existing.revenue + (order.base_price - order.commission_amount),
+        orders: existing.orders + 1,
+      });
+    }
+  });
+
+  const dailyRevenue = Array.from(dailyMap.entries()).map(([date, data]) => ({
+    date,
+    revenue: data.revenue,
+    orders: data.orders,
+  }));
+
+  const totalRevenue = dailyRevenue.reduce((sum, d) => sum + d.revenue, 0);
+  const totalOrders = dailyRevenue.reduce((sum, d) => sum + d.orders, 0);
+  const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+
+  return {
+    data: {
+      dailyRevenue,
+      totalRevenue,
+      totalOrders,
+      averageOrderValue,
+    },
+  };
+}

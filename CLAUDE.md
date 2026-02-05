@@ -1,12 +1,17 @@
 # CleanBag App - Development Guide
 
+## Repository Info
+- **Repo**: [CleanBag-io/cleanbag-app](https://github.com/CleanBag-io/cleanbag-app)
+- **Related**: Business docs & prototype live in [ericosg/cleanbag](https://github.com/ericosg/cleanbag)
+- **Local path**: `/Users/eric/sandbox/cleanbag/cleanbag-app` (nested inside the parent repo but independent git history; parent `.gitignore` excludes this directory)
+
 ## Project Overview
-CleanBag is a food delivery bag cleaning marketplace for Cyprus. This is the production Next.js application.
+CleanBag is a food delivery bag cleaning marketplace for Cyprus. This is the production Next.js application connecting delivery drivers with cleaning facilities.
 
 ## Tech Stack
 - **Framework**: Next.js 16 (App Router, Turbopack)
 - **Language**: TypeScript
-- **Styling**: Tailwind CSS v4 (CSS-based config)
+- **Styling**: Tailwind CSS v4 (CSS-based config in `globals.css`)
 - **Database**: Supabase (Postgres + Auth + Realtime)
 - **Package Manager**: pnpm
 - **Deployment**: Vercel (planned)
@@ -23,7 +28,7 @@ pnpm dev
 src/
 ├── app/
 │   ├── (marketing)/        # Landing page (/)
-│   ├── (auth)/             # /login, /register
+│   ├── (auth)/             # /login, /register (shared layout with logo)
 │   ├── auth/               # Auth callbacks (/auth/callback, /auth/confirm)
 │   ├── driver/             # Driver portal (/driver/*)
 │   │   ├── dashboard/      # Driver home with compliance status
@@ -32,33 +37,39 @@ src/
 │   │   ├── history/        # Cleaning history & stats
 │   │   ├── profile/        # Driver profile management
 │   │   └── onboarding/     # Driver setup wizard
-│   ├── facility/           # Facility dashboard (/facility/*)
-│   │   ├── dashboard/      # Facility home with order queue
+│   ├── facility/           # Facility portal (/facility/*)
+│   │   ├── dashboard/      # Facility home with order queue + action buttons
 │   │   ├── orders/         # Order list with status filtering
-│   │   ├── revenue/        # Revenue tracking & charts
-│   │   └── settings/       # Facility profile management
-│   ├── agency/             # Agency management (/agency/*)
-│   ├── admin/              # Admin panel (/admin/*)
-│   ├── api/webhooks/       # Stripe & Twilio webhooks
+│   │   ├── revenue/        # Revenue tracking with bar chart
+│   │   ├── settings/       # Facility profile + services + payout info
+│   │   └── onboarding/     # Facility setup wizard
+│   ├── agency/             # Agency management (/agency/*) - stub
+│   ├── admin/              # Admin panel (/admin/*) - stub
 │   └── globals.css         # Design tokens (Tailwind v4)
 ├── components/
 │   ├── ui/                 # Button, Card, Badge, Input, Select, Label
-│   └── layout/             # Sidebar, Header, MobileNav
+│   └── layout/             # Sidebar, Header (with profile dropdown + logout), MobileNav
 ├── lib/
-│   ├── auth/               # Auth actions & context provider
+│   ├── auth/               # Auth actions (login, register, logout, getUser, updateProfile)
 │   ├── driver/             # Driver server actions (CRUD, booking)
-│   ├── facility/           # Facility server actions (orders, stats, revenue)
+│   ├── facility/           # Facility server actions (orders, stats, revenue, onboarding)
 │   ├── supabase/           # client.ts, server.ts, session.ts
-│   └── utils.ts            # cn(), formatCurrency(), getRelativeTime(), etc.
-├── config/constants.ts     # App constants, pricing, service types
+│   └── utils.ts            # cn(), formatCurrency(), formatDate(), getRelativeTime(), etc.
+├── config/constants.ts     # App constants, pricing, service types, cities, roles
 ├── types/index.ts          # TypeScript interfaces
 └── proxy.ts                # Auth middleware (Next.js 16 convention)
+
+public/
+├── logo.svg                # Brand icon (pink checkmark)
+├── logo.png                # Brand icon (PNG)
+├── logo-text.svg           # Icon + "CleanBag" text (SVG, uses Avenir font)
+└── logo-text.png           # Icon + "CleanBag" text (PNG)
 
 supabase/
 ├── schema.sql              # Database schema (run first)
 ├── fix-profiles-rls.sql    # RLS fix (run after schema.sql)
 ├── seed-test-data.sql      # Sample data for testing (edit UUIDs first)
-└── reset-data.sql          # Wipe all data for fresh testing
+└── reset-data.sql          # Wipe ALL data including auth users
 ```
 
 ## Environment Variables
@@ -78,15 +89,48 @@ Run these SQL files in Supabase SQL Editor (in order):
 
 **Key features**:
 - Row Level Security (RLS) on all tables
-- Auto-creates profile on user signup (trigger)
+- Auto-creates profile on user signup (trigger, reads role from `raw_user_meta_data`)
 - Auto-generates order numbers (CB-YYYYMMDD-XXXX)
 - Auto-updates driver compliance status based on last cleaning date
+
+## Testing Workflow
+1. Run `supabase/reset-data.sql` in SQL Editor to wipe everything
+2. Disable "Confirm email" in Supabase Auth settings (for local dev)
+3. Register accounts at `/register` (select role: driver or facility)
+4. Each role redirects to its onboarding flow, then dashboard
+5. Optionally run `supabase/seed-test-data.sql` (replace UUIDs first) for sample orders
 
 ## Design Tokens (globals.css)
 Brand colors available as Tailwind classes:
 - `brand-pink`, `brand-pink-hover`, `brand-pink-light`, `brand-pink-dark`
 - `trust-blue`, `trust-blue-hover`, `trust-blue-light`, `trust-blue-dark`
 - `status-completed`, `status-pending`, `status-in-progress`, `status-overdue`
+
+## Branding
+- Logo icon is a pink rounded square with checkmark (`/public/logo.svg`)
+- Used in: landing page header, auth pages, sidebar, onboarding, favicon
+- Sidebar uses `brightness-0 invert` filter to make logo white on dark background
+- Text "CleanBag" is rendered via CSS (not the SVG text variant) to avoid font issues
+
+## Key Patterns
+
+### Auth Flow
+- Registration saves role in Supabase `raw_user_meta_data` (full_name + role)
+- Database trigger auto-creates profile row with that role
+- Login/callback redirects to role-specific dashboard
+- Dashboard checks for role record (driver/facility); redirects to onboarding if missing
+- Header component has profile dropdown with logout (all roles)
+
+### Server Actions
+- All data mutations use `"use server"` actions in `lib/*/actions.ts`
+- Actions return `{ error?: string, data?: T }` pattern
+- Client components call actions and use `router.refresh()` after mutations
+- `revalidatePath` used after writes to update server-rendered pages
+
+### Layout System
+- Each role has its own layout with Sidebar (desktop) + MobileNav (mobile) + Header
+- Layouts are server components that fetch user profile and pass to Header
+- Header receives `role` and `userName` props for the profile dropdown
 
 ## Sprint Progress
 
@@ -119,12 +163,17 @@ Brand colors available as Tailwind classes:
 - [x] Driver server actions (getDriver, getFacilities, createOrder, etc.)
 
 ### Sprint 4: Facility Features ✅ COMPLETE
+- [x] Facility onboarding flow (name, address, city)
 - [x] Facility dashboard with pending orders and stats
-- [x] Order management (accept, start, complete)
-- [x] Orders page with status filtering
-- [x] Revenue tracking with daily chart and statistics
-- [x] Facility profile/settings page
-- [x] Facility server actions (getFacilityOrders, acceptOrder, startOrder, completeOrder, getFacilityStats, getFacilityRevenue, updateFacility)
+- [x] Order management (accept, start, complete) with action buttons
+- [x] Orders page with status filtering (all/active/pending/in-progress/completed/cancelled)
+- [x] Revenue tracking with daily bar chart and period selector (7/30 days)
+- [x] Facility profile/settings page with editable fields
+- [x] Facility server actions (createFacility, getFacilityOrders, acceptOrder, startOrder, completeOrder, getFacilityStats, getFacilityRevenue, updateFacility)
+
+### Post-Sprint Fixes
+- [x] Profile dropdown with logout in Header (all roles)
+- [x] Logo integrated everywhere (landing, auth, sidebar, onboarding, favicon)
 
 ### Future Sprints
 - Sprint 5: Payments (Stripe integration)
@@ -132,9 +181,9 @@ Brand colors available as Tailwind classes:
 - Sprint 7: Notifications, PWA, polish
 
 ## Reference Files
-- Production plan: `../docs/production-plan.md`
 - Prototype (for UI patterns): `../cleanbag-prototype/`
-- Business docs: `../` (CLAUDE.md has full index)
+- Business docs: `../` (parent repo CLAUDE.md has full index)
+- Prototype logos: `../cleanbag-prototype/logos/`
 
 ## Commands
 ```bash
@@ -148,3 +197,5 @@ pnpm lint     # Run ESLint
 - Next.js 16 uses `proxy.ts` instead of `middleware.ts`
 - Tailwind v4 uses CSS-based config in `globals.css` (@theme directive)
 - Supabase key is named `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY` (new convention)
+- Disable "Confirm email" in Supabase Auth settings for local development to avoid rate limits
+- The `logo-text.svg` uses Avenir font which may not render on all systems; prefer `logo.svg` + CSS text

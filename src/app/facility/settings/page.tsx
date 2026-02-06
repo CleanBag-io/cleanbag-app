@@ -51,7 +51,7 @@ export default async function FacilitySettingsPage() {
       {/* Facility Profile */}
       <Card className="p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">
-          Facility Profile
+          Cleaning Facility Profile
         </h2>
         <FacilityProfileForm facility={facility} />
       </Card>
@@ -131,12 +131,12 @@ export default async function FacilitySettingsPage() {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">
-              Facility Status
+              Cleaning Facility Status
             </h2>
             <p className="text-sm text-gray-500 mt-1">
               {facility?.is_active
-                ? "Your facility is visible to drivers"
-                : "Your facility is hidden from drivers"}
+                ? "Your cleaning facility is visible to drivers"
+                : "Your cleaning facility is hidden from drivers"}
             </p>
           </div>
           <Badge variant={facility?.is_active ? "success" : "inactive"}>
@@ -144,7 +144,7 @@ export default async function FacilitySettingsPage() {
           </Badge>
         </div>
         <p className="text-sm text-gray-400 mt-4">
-          Contact support to change your facility status.
+          Contact support to change your cleaning facility status.
         </p>
       </Card>
 

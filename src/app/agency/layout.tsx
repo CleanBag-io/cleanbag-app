@@ -22,7 +22,7 @@ export default async function AgencyLayout({
       <Sidebar navItems={agencyNavItems} role="agency" />
       <div className="md:pl-sidebar">
         <Header
-          title="Agency Management"
+          title="Company Management"
           role="agency"
           userName={profile?.full_name || undefined}
         />

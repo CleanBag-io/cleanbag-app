@@ -121,7 +121,7 @@ export default function RegisterPage() {
           <Select id="role" name="role" required disabled={isPending}>
             <option value="driver">Delivery Driver</option>
             <option value="facility">Cleaning Facility</option>
-            <option value="agency">Delivery Agency</option>
+            <option value="agency">Company</option>
           </Select>
         </div>
 

@@ -69,12 +69,12 @@ export default function FacilityOnboardingPage() {
         <Card>
           <CardHeader>
             <CardTitle>
-              {step === 1 && "Facility Details"}
+              {step === 1 && "Cleaning Facility Details"}
               {step === 2 && "Location"}
             </CardTitle>
             <CardDescription>
               {step === 1 && "Tell us about your cleaning facility"}
-              {step === 2 && "Where is your facility located?"}
+              {step === 2 && "Where is your cleaning facility located?"}
             </CardDescription>
           </CardHeader>
 
@@ -84,7 +84,7 @@ export default function FacilityOnboardingPage() {
               <div className="space-y-4">
                 <div>
                   <Label htmlFor="name" required>
-                    Facility Name
+                    Cleaning Facility Name
                   </Label>
                   <Input
                     id="name"
@@ -206,7 +206,7 @@ export default function FacilityOnboardingPage() {
                   disabled={!canProceedStep2 || loading}
                   onClick={handleSubmit}
                 >
-                  {loading ? "Creating Facility..." : "Complete Setup"}
+                  {loading ? "Creating Cleaning Facility..." : "Complete Setup"}
                 </Button>
                 <Button
                   fullWidth

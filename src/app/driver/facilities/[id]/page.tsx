@@ -32,7 +32,7 @@ export default async function FacilityDetailPage({ params }: PageProps) {
         href="/driver/facilities"
         className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900"
       >
-        ← Back to Facilities
+        ← Back to Cleaning Facilities
       </Link>
 
       {/* Facility Header */}
@@ -80,7 +80,7 @@ export default async function FacilityDetailPage({ params }: PageProps) {
           {services.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-gray-500">
-                This facility hasn&apos;t set up their services yet.
+                This cleaning facility hasn&apos;t set up their services yet.
               </p>
             </div>
           ) : (

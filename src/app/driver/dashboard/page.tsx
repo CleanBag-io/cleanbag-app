@@ -89,7 +89,7 @@ export default async function DriverDashboardPage() {
         <Link href="/driver/facilities">
           <Card variant="clickable" className="flex flex-col items-center justify-center p-6 h-full">
             <span className="text-3xl mb-2">🔍</span>
-            <span className="text-sm font-medium text-gray-900">Find Facility</span>
+            <span className="text-sm font-medium text-gray-900">Find Cleaning Facility</span>
           </Card>
         </Link>
         <Link href="/driver/orders">
@@ -103,7 +103,7 @@ export default async function DriverDashboardPage() {
       {/* Nearby Facilities */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Nearby Facilities</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Nearby Cleaning Facilities</h2>
           <Link href="/driver/facilities" className="text-sm text-trust-blue hover:underline">
             View all
           </Link>
@@ -111,7 +111,7 @@ export default async function DriverDashboardPage() {
 
         {nearbyFacilities.length === 0 ? (
           <Card className="p-6 text-center">
-            <p className="text-gray-500">No facilities found in your area</p>
+            <p className="text-gray-500">No cleaning facilities found in your area</p>
           </Card>
         ) : (
           <div className="space-y-3">
@@ -166,7 +166,7 @@ export default async function DriverDashboardPage() {
               Book your first cleaning to get started!
             </p>
             <Link href="/driver/facilities">
-              <Button className="mt-4">Find a Facility</Button>
+              <Button className="mt-4">Find a Cleaning Facility</Button>
             </Link>
           </Card>
         ) : (
@@ -181,7 +181,7 @@ export default async function DriverDashboardPage() {
                     <div className="flex items-start justify-between">
                       <div>
                         <h3 className="font-medium text-gray-900">
-                          {order.facility?.name || "Facility"}
+                          {order.facility?.name || "Cleaning Facility"}
                         </h3>
                         <p className="text-sm text-gray-500 mt-1">
                           {formatDateTime(order.created_at)}

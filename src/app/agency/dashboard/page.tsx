@@ -1,7 +1,7 @@
 export default function AgencyDashboardPage() {
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-gray-900">Agency Dashboard</h1>
+      <h1 className="text-2xl font-semibold text-gray-900">Company Dashboard</h1>
 
       {/* Compliance Overview */}
       <div className="rounded-lg bg-brand-pink p-6 text-white shadow-md">

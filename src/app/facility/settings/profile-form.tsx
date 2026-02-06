@@ -39,7 +39,7 @@ export function FacilityProfileForm({ facility }: FacilityProfileFormProps) {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <Label htmlFor="name">Facility Name</Label>
+        <Label htmlFor="name">Cleaning Facility Name</Label>
         <Input
           id="name"
           name="name"

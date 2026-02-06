@@ -154,7 +154,7 @@ export default async function HistoryPage() {
             Complete your first cleaning to see it here!
           </p>
           <Link href="/driver/facilities" className="text-trust-blue hover:underline mt-4 inline-block">
-            Find a facility →
+            Find a cleaning facility →
           </Link>
         </Card>
       ) : (
@@ -172,7 +172,7 @@ export default async function HistoryPage() {
                         <div className="flex items-start justify-between">
                           <div>
                             <h4 className="font-medium text-gray-900">
-                              {order.facility?.name || "Facility"}
+                              {order.facility?.name || "Cleaning Facility"}
                             </h4>
                             <p className="text-sm text-gray-500">
                               {serviceInfo?.name || order.service_type}

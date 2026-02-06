@@ -61,7 +61,7 @@ export default async function OrderDetailPage({ params }: PageProps) {
             <div>
               <p className="text-sm text-gray-500 font-mono">{order.order_number}</p>
               <h1 className="text-2xl font-bold text-gray-900 mt-1">
-                {order.facility?.name || "Facility"}
+                {order.facility?.name || "Cleaning Facility"}
               </h1>
               <p className="text-gray-600 mt-1">{order.facility?.address}</p>
             </div>
@@ -183,7 +183,7 @@ export default async function OrderDetailPage({ params }: PageProps) {
               <span className="font-medium">{serviceInfo?.duration || "15-20 min"}</span>
             </div>
             <div className="flex justify-between py-2 border-b border-gray-100">
-              <span className="text-gray-600">Facility</span>
+              <span className="text-gray-600">Cleaning Facility</span>
               <span className="font-medium">{order.facility?.name}</span>
             </div>
             <div className="flex justify-between py-2 border-b border-gray-100">
@@ -266,7 +266,7 @@ export default async function OrderDetailPage({ params }: PageProps) {
             >
               <span className="text-2xl">📞</span>
               <span className="font-medium text-gray-900">
-                Contact Facility
+                Contact Cleaning Facility
               </span>
             </a>
           </CardContent>

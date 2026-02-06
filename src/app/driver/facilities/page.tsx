@@ -20,11 +20,11 @@ export default async function FacilitiesPage({ searchParams }: PageProps) {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Find a Facility</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Find a Cleaning Facility</h1>
         <p className="text-gray-600 mt-1">
           {filterCity
-            ? `Showing facilities in ${filterCity}`
-            : "Showing all facilities in Cyprus"}
+            ? `Showing cleaning facilities in ${filterCity}`
+            : "Showing all cleaning facilities in Cyprus"}
         </p>
       </div>
 
@@ -73,13 +73,13 @@ export default async function FacilitiesPage({ searchParams }: PageProps) {
       {/* Facilities List */}
       <div>
         <h2 className="text-lg font-semibold text-gray-900 mb-4">
-          {facilities?.length || 0} Facilities Available
+          {facilities?.length || 0} Cleaning Facilities Available
         </h2>
 
         {facilities?.length === 0 ? (
           <Card className="p-8 text-center">
             <div className="text-4xl mb-3">🏢</div>
-            <h3 className="font-medium text-gray-900">No facilities found</h3>
+            <h3 className="font-medium text-gray-900">No cleaning facilities found</h3>
             <p className="text-sm text-gray-500 mt-1">
               Try selecting a different city or check back later.
             </p>

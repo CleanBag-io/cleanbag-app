@@ -79,7 +79,6 @@ export const CITIES = [
   "Larnaca",
   "Paphos",
   "Famagusta",
-  "Kyrenia",
 ] as const;
 
 export type City = (typeof CITIES)[number];

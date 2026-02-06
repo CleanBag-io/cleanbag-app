@@ -22,7 +22,7 @@ export default async function FacilityLayout({
       <Sidebar navItems={facilityNavItems} role="facility" />
       <div className="md:pl-sidebar">
         <Header
-          title="Facility Dashboard"
+          title="Cleaning Facility Dashboard"
           role="facility"
           userName={profile?.full_name || undefined}
         />

@@ -87,7 +87,7 @@ export default async function OrdersPage() {
             Book your first bag cleaning to get started!
           </p>
           <Link href="/driver/facilities">
-            <Button className="mt-6">Find a Facility</Button>
+            <Button className="mt-6">Find a Cleaning Facility</Button>
           </Link>
         </Card>
       )}
@@ -133,7 +133,7 @@ function OrderCard({ order }: { order: Order }) {
           <div>
             <p className="text-xs text-gray-500 font-mono">{order.order_number}</p>
             <h3 className="font-semibold text-gray-900 mt-1">
-              {order.facility?.name || "Facility"}
+              {order.facility?.name || "Cleaning Facility"}
             </h3>
             <p className="text-sm text-gray-500 mt-1">
               {order.facility?.address}

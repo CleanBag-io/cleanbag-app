@@ -47,13 +47,13 @@ export default function HomePage() {
                 href="/register"
                 className="rounded-md bg-brand-pink px-6 py-3 text-base font-semibold text-white shadow-sm hover:bg-brand-pink-dark"
               >
-                Find a Facility
+                Find a Cleaning Facility
               </Link>
               <Link
                 href="/register?role=facility"
                 className="rounded-md bg-white px-6 py-3 text-base font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
               >
-                List Your Facility
+                List Your Cleaning Facility
               </Link>
             </div>
           </div>
@@ -70,7 +70,7 @@ export default function HomePage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
                 </div>
-                <h3 className="mt-6 text-lg font-semibold text-gray-900">Find Nearby Facilities</h3>
+                <h3 className="mt-6 text-lg font-semibold text-gray-900">Find Nearby Cleaning Facilities</h3>
                 <p className="mt-2 text-gray-600">Locate certified cleaning facilities near your delivery routes across Cyprus.</p>
               </div>
               <div className="text-center">

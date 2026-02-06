@@ -43,7 +43,7 @@ src/
 │   │   ├── revenue/        # Revenue tracking with bar chart
 │   │   ├── settings/       # Facility profile + services + payout info
 │   │   └── onboarding/     # Facility setup wizard
-│   ├── agency/             # Agency management (/agency/*) - stub
+│   ├── agency/             # Company management (/agency/*) - stub
 │   ├── admin/              # Admin panel (/admin/*) - stub
 │   └── globals.css         # Design tokens (Tailwind v4)
 ├── components/
@@ -185,10 +185,13 @@ Brand colors available as Tailwind classes:
 ### Post-Sprint Fixes
 - [x] Profile dropdown with logout in Header (all roles)
 - [x] Logo integrated everywhere (landing, auth, sidebar, onboarding, favicon)
+- [x] Terminology update: "facility" → "cleaning facility" in all user-facing text (17 files)
+- [x] Terminology update: "agency" → "company" in registration and company portal
+- [x] Removed Kyrenia from cities (operating in southern Cyprus only: Nicosia, Limassol, Larnaca, Paphos, Famagusta)
 
 ### Future Sprints
 - Sprint 5: Payments (Stripe integration)
-- Sprint 6: Agency & Admin dashboards
+- Sprint 6: Company & Admin dashboards
 - Sprint 7: Notifications, PWA, polish
 
 ## Reference Files
@@ -203,6 +206,22 @@ pnpm build    # Production build
 pnpm start    # Run production build
 pnpm lint     # Run ESLint
 ```
+
+## Terminology Conventions
+
+User-facing text uses specific terms that differ from internal code identifiers:
+
+| Concept | User-Facing Label | Code/DB Identifier |
+|---|---|---|
+| Cleaning facility | "Cleaning Facility" | `facility`, `facilities` (routes, variables, DB tables) |
+| Company (Wolt, Bolt, Foody, or driver agency) | "Company" | `agency` (routes, DB table, role value) |
+| Supported cities | Nicosia, Limassol, Larnaca, Paphos, Famagusta | `CITIES` in `config/constants.ts` |
+
+**Important**: When adding new user-facing text:
+- Always write "cleaning facility" (not just "facility") when referring to the business
+- Always write "company" (not "agency") when referring to the driver's employer
+- Kyrenia is excluded — we only operate in southern Cyprus
+- Internal code (routes like `/facility/*`, `/agency/*`, DB fields like `facility_id`, `agency_id`, type names like `Facility`, `Agency`) should NOT be renamed
 
 ## Notes
 - Next.js 16 uses `proxy.ts` instead of `middleware.ts`

@@ -89,7 +89,7 @@ export default function HomePage() {
                   </svg>
                 </div>
                 <h3 className="mt-6 text-lg font-semibold text-gray-900">Fair Pricing</h3>
-                <p className="mt-2 text-gray-600">Transparent pricing from €6.50 per clean. No hidden fees.</p>
+                <p className="mt-2 text-gray-600">Transparent pricing from €4.50 per clean. No hidden fees.</p>
               </div>
             </div>
           </div>

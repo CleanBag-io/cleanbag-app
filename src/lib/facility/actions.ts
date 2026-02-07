@@ -2,8 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { stripe } from "@/lib/stripe/client";
 import type { Facility, Order, Driver, Profile } from "@/types";
 import type { OrderStatus } from "@/config/constants";
+import { COMMISSION_RATES } from "@/config/constants";
 
 export type ActionResult<T = void> = {
   error?: string;
@@ -42,11 +44,9 @@ export async function createFacility(formData: FormData): Promise<ActionResult> 
     return { error: "Facility already exists" };
   }
 
-  // Create facility with default services
+  // Create facility with default service
   const defaultServices = [
-    { type: "standard", price: 6.5, duration: 20 },
-    { type: "express", price: 8.5, duration: 10 },
-    { type: "deep", price: 10.0, duration: 30 },
+    { type: "standard", price: 4.5, duration: 20 },
   ];
 
   const { error } = await supabase.from("facilities").insert({
@@ -56,7 +56,7 @@ export async function createFacility(formData: FormData): Promise<ActionResult> 
     city,
     phone: phone || null,
     services: defaultServices,
-    commission_rate: 0.15,
+    commission_rate: COMMISSION_RATES.default,
     is_active: true,
     rating: 0,
     total_orders: 0,
@@ -336,7 +336,7 @@ export async function completeOrder(orderId: string): Promise<ActionResult> {
   // Verify order belongs to this facility and is in progress
   const { data: order } = await supabase
     .from("orders")
-    .select("status, driver_id")
+    .select("status, driver_id, base_price, commission_amount, stripe_payment_intent_id")
     .eq("id", orderId)
     .eq("facility_id", facility.id)
     .single();
@@ -351,19 +351,73 @@ export async function completeOrder(orderId: string): Promise<ActionResult> {
 
   const now = new Date().toISOString();
 
-  // Update order status
+  // Update order status (payment_status already set to 'paid' by webhook on upfront payment)
   const { error: orderError } = await supabase
     .from("orders")
     .update({
       status: "completed",
       completed_at: now,
-      payment_status: "paid", // In real app, this would be after Stripe payment
     })
     .eq("id", orderId);
 
   if (orderError) {
     return { error: orderError.message };
   }
+
+  // Get full facility record for Stripe transfer
+  const { data: fullFacility } = await supabase
+    .from("facilities")
+    .select("stripe_account_id")
+    .eq("id", facility.id)
+    .single();
+
+  // Calculate payout (base_price - commission)
+  const payoutAmount = Math.round((order.base_price - order.commission_amount) * 100); // cents
+
+  // Create Stripe transfer if facility has connected account and order was paid
+  let stripeTransferId: string | null = null;
+  const txStatus = fullFacility?.stripe_account_id && order.stripe_payment_intent_id ? "completed" : "pending";
+
+  if (fullFacility?.stripe_account_id && order.stripe_payment_intent_id && stripe) {
+    try {
+      const transfer = await stripe.transfers.create({
+        amount: payoutAmount,
+        currency: "eur",
+        destination: fullFacility.stripe_account_id,
+        transfer_group: orderId,
+      });
+      stripeTransferId = transfer.id;
+    } catch (err) {
+      console.error("Stripe transfer failed:", err);
+      // Continue — transactions recorded as pending
+    }
+  }
+
+  // Insert transaction records
+  await supabase.from("transactions").insert([
+    {
+      order_id: orderId,
+      facility_id: facility.id,
+      type: "order_payment",
+      amount: order.base_price,
+      status: txStatus,
+    },
+    {
+      order_id: orderId,
+      facility_id: facility.id,
+      type: "commission",
+      amount: order.commission_amount,
+      status: txStatus,
+    },
+    {
+      order_id: orderId,
+      facility_id: facility.id,
+      type: "payout",
+      amount: order.base_price - order.commission_amount,
+      status: txStatus,
+      stripe_transfer_id: stripeTransferId,
+    },
+  ]);
 
   // Update driver's last cleaning date and total cleanings
   const { error: driverError } = await supabase.rpc("increment_driver_cleanings", {

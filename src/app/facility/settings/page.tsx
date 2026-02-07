@@ -4,7 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { getCurrentFacility, getFacilityStats } from "@/lib/facility/actions";
 import { getUser } from "@/lib/auth/actions";
 import { formatCurrency } from "@/lib/utils";
-import { SERVICE_TYPES } from "@/config/constants";
+import { PRICING } from "@/config/constants";
+import { StripeConnectSection } from "./stripe-connect";
 import { FacilityProfileForm } from "./profile-form";
 
 export default async function FacilitySettingsPage() {
@@ -56,40 +57,26 @@ export default async function FacilitySettingsPage() {
         <FacilityProfileForm facility={facility} />
       </Card>
 
-      {/* Services */}
+      {/* Service & Earnings */}
       <Card className="p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Services</h2>
-        <div className="space-y-3">
-          {facility?.services && facility.services.length > 0 ? (
-            facility.services.map((service) => {
-              const serviceInfo =
-                SERVICE_TYPES[service.type as keyof typeof SERVICE_TYPES];
-              return (
-                <div
-                  key={service.type}
-                  className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0"
-                >
-                  <div>
-                    <p className="font-medium text-gray-900">
-                      {serviceInfo?.name || service.type}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      {serviceInfo?.duration || `${service.duration} min`}
-                    </p>
-                  </div>
-                  <p className="font-semibold text-gray-900">
-                    {formatCurrency(service.price)}
-                  </p>
-                </div>
-              );
-            })
-          ) : (
-            <p className="text-gray-500">No services configured</p>
-          )}
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Service & Earnings</h2>
+        <div className="flex items-center justify-between py-3 border-b border-gray-100">
+          <div>
+            <p className="font-medium text-gray-900">Clean Delivery Bag</p>
+            <p className="text-sm text-gray-500">15-20 min</p>
+          </div>
+          <p className="font-semibold text-gray-900">
+            {formatCurrency(PRICING.bagClean)}
+          </p>
         </div>
-        <p className="text-sm text-gray-400 mt-4">
-          Contact support to modify your service offerings.
-        </p>
+        <div className="mt-4 p-4 bg-brand-pink-light rounded-lg">
+          <p className="text-sm font-medium text-gray-900">
+            You earn {formatCurrency(PRICING.bagClean * (1 - (facility?.commission_rate || 0.471)))} per cleaning
+          </p>
+          <p className="text-xs text-gray-500 mt-1">
+            Driver pays {formatCurrency(PRICING.bagClean)} — CleanBag platform fee is deducted automatically
+          </p>
+        </div>
       </Card>
 
       {/* Statistics */}
@@ -118,9 +105,9 @@ export default async function FacilitySettingsPage() {
             </p>
           </div>
           <div>
-            <p className="text-sm text-gray-500">Commission Rate</p>
+            <p className="text-sm text-gray-500">Payout per Clean</p>
             <p className="text-2xl font-bold text-gray-900">
-              {((facility?.commission_rate || 0.15) * 100).toFixed(0)}%
+              {formatCurrency(PRICING.bagClean * (1 - (facility?.commission_rate || 0.471)))}
             </p>
           </div>
         </div>
@@ -150,27 +137,13 @@ export default async function FacilitySettingsPage() {
 
       {/* Payout Settings */}
       <Card className="p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-2">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">
           Payout Settings
         </h2>
-        {facility?.stripe_account_id ? (
-          <div>
-            <Badge variant="success">Stripe Connected</Badge>
-            <p className="text-sm text-gray-500 mt-2">
-              Your Stripe account is connected for payouts.
-            </p>
-          </div>
-        ) : (
-          <div>
-            <Badge variant="warning">Not Connected</Badge>
-            <p className="text-sm text-gray-500 mt-2">
-              Connect your Stripe account to receive payouts.
-            </p>
-            <p className="text-sm text-gray-400 mt-1">
-              Stripe integration coming soon.
-            </p>
-          </div>
-        )}
+        <StripeConnectSection
+          facilityId={facility?.id || ""}
+          stripeAccountId={facility?.stripe_account_id || null}
+        />
       </Card>
     </div>
   );

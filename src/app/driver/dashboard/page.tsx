@@ -5,8 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getDriver, getDriverOrders, getFacilities } from "@/lib/driver/actions";
 import { getUser } from "@/lib/auth/actions";
-import { getRelativeTime, formatCurrency, formatDateTime } from "@/lib/utils";
-import { SERVICE_TYPES, ORDER_STATUSES } from "@/config/constants";
+import { getRelativeTime, formatCurrency, formatDateTime, getServiceName } from "@/lib/utils";
+import { PRICING, ORDER_STATUSES } from "@/config/constants";
 
 export default async function DriverDashboardPage() {
   const profile = await getUser();
@@ -125,7 +125,7 @@ export default async function DriverDashboardPage() {
                     </div>
                     <div className="text-right">
                       <p className="font-semibold text-gray-900">
-                        {formatCurrency((facility.services as { type: string; price: number }[])?.[0]?.price || 6.5)}
+                        {formatCurrency(PRICING.bagClean)}
                       </p>
                       <p className="text-xs text-gray-500">{facility.city}</p>
                     </div>
@@ -173,7 +173,7 @@ export default async function DriverDashboardPage() {
           <div className="space-y-3">
             {recentOrders.map((order) => {
               const statusInfo = ORDER_STATUSES[order.status as keyof typeof ORDER_STATUSES];
-              const serviceInfo = SERVICE_TYPES[order.service_type as keyof typeof SERVICE_TYPES];
+              const serviceName = getServiceName(order.service_type);
 
               return (
                 <Link key={order.id} href={`/driver/orders/${order.id}`}>
@@ -205,7 +205,7 @@ export default async function DriverDashboardPage() {
                     </div>
                     <div className="flex items-center justify-between mt-3">
                       <span className="text-sm text-gray-600">
-                        {serviceInfo?.name || order.service_type}
+                        {serviceName}
                       </span>
                       <span className="font-semibold">
                         {formatCurrency(order.total_price)}

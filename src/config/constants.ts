@@ -5,38 +5,20 @@ export const APP_CONFIG = {
 } as const;
 
 export const PRICING = {
-  standardClean: 6.5,
-  expressClean: 8.5,
-  deepClean: 10.0,
+  bagClean: 4.5,
   currency: "€",
 } as const;
 
 export const COMMISSION_RATES = {
-  default: 0.15,
-  starter: 0.18,
-  growth: 0.15,
-  scale: 0.12,
-  enterprise: 0.1,
+  default: 0.471,
 } as const;
 
 export const SERVICE_TYPES = {
   standard: {
-    name: "Standard Clean",
+    name: "Clean Delivery Bag",
     duration: "15-20 min",
     description: "Interior and exterior cleaning with sanitization",
-    price: PRICING.standardClean,
-  },
-  express: {
-    name: "Express Clean",
-    duration: "10 min",
-    description: "Quick clean for time-sensitive deliveries",
-    price: PRICING.expressClean,
-  },
-  deep: {
-    name: "Deep Clean",
-    duration: "30 min",
-    description: "Thorough cleaning with deep sanitization",
-    price: PRICING.deepClean,
+    price: PRICING.bagClean,
   },
 } as const;
 

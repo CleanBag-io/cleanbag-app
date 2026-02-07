@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getFacility } from "@/lib/driver/actions";
 import { formatCurrency } from "@/lib/utils";
-import { SERVICE_TYPES } from "@/config/constants";
+import { PRICING, SERVICE_TYPES } from "@/config/constants";
 import { BookingForm } from "./booking-form";
 
 interface PageProps {
@@ -19,7 +19,6 @@ export default async function FacilityDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  const services = (facility.services as { type: string; price: number; duration: number }[]) || [];
   const operatingHours = facility.operating_hours as Record<string, { open: string; close: string }> | null;
 
   const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -77,15 +76,7 @@ export default async function FacilityDetailPage({ params }: PageProps) {
         <CardContent className="p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Book a Cleaning</h2>
 
-          {services.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-gray-500">
-                This cleaning facility hasn&apos;t set up their services yet.
-              </p>
-            </div>
-          ) : (
-            <BookingForm facilityId={facility.id} services={services} />
-          )}
+          <BookingForm facilityId={facility.id} />
         </CardContent>
       </Card>
 
@@ -127,37 +118,29 @@ export default async function FacilityDetailPage({ params }: PageProps) {
         </Card>
       )}
 
-      {/* Services Info */}
+      {/* Service Info */}
       <Card>
         <CardContent className="p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Services Offered</h2>
-          <div className="space-y-4">
-            {services.map((service) => {
-              const serviceInfo = SERVICE_TYPES[service.type as keyof typeof SERVICE_TYPES];
-              return (
-                <div
-                  key={service.type}
-                  className="flex items-start justify-between p-4 bg-gray-50 rounded-lg"
-                >
-                  <div>
-                    <h3 className="font-medium text-gray-900">
-                      {serviceInfo?.name || service.type}
-                    </h3>
-                    <p className="text-sm text-gray-500 mt-1">
-                      {serviceInfo?.description || ""}
-                    </p>
-                    <p className="text-sm text-gray-400 mt-1">
-                      Duration: ~{service.duration} min
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xl font-bold text-gray-900">
-                      {formatCurrency(service.price)}
-                    </p>
-                  </div>
-                </div>
-              );
-            })}
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Service Offered</h2>
+          <div
+            className="flex items-start justify-between p-4 bg-gray-50 rounded-lg"
+          >
+            <div>
+              <h3 className="font-medium text-gray-900">
+                {SERVICE_TYPES.standard.name}
+              </h3>
+              <p className="text-sm text-gray-500 mt-1">
+                {SERVICE_TYPES.standard.description}
+              </p>
+              <p className="text-sm text-gray-400 mt-1">
+                Duration: {SERVICE_TYPES.standard.duration}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-xl font-bold text-gray-900">
+                {formatCurrency(PRICING.bagClean)}
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>

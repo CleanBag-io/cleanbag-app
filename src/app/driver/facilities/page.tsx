@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getDriver, getFacilities } from "@/lib/driver/actions";
 import { formatCurrency } from "@/lib/utils";
-import { CITIES, type City } from "@/config/constants";
+import { CITIES, PRICING, type City } from "@/config/constants";
 
 interface PageProps {
   searchParams: Promise<{ city?: string }>;
@@ -86,13 +86,7 @@ export default async function FacilitiesPage({ searchParams }: PageProps) {
           </Card>
         ) : (
           <div className="space-y-3">
-            {facilities?.map((facility) => {
-              // Extract pricing from services
-              const services = facility.services as { type: string; price: number; duration: number }[] || [];
-              const standardService = services.find((s) => s.type === "standard");
-              const basePrice = standardService?.price || 6.5;
-
-              return (
+            {facilities?.map((facility) => (
                 <Link key={facility.id} href={`/driver/facilities/${facility.id}`}>
                   <Card variant="clickable" className="p-4">
                     <div className="flex items-start justify-between">
@@ -108,9 +102,9 @@ export default async function FacilitiesPage({ searchParams }: PageProps) {
                       </div>
                       <div className="text-right">
                         <p className="text-lg font-bold text-gray-900">
-                          {formatCurrency(basePrice)}
+                          {formatCurrency(PRICING.bagClean)}
                         </p>
-                        <p className="text-xs text-gray-500">from</p>
+                        <p className="text-xs text-gray-500">per clean</p>
                       </div>
                     </div>
 
@@ -128,23 +122,9 @@ export default async function FacilitiesPage({ searchParams }: PageProps) {
                         </div>
                       )}
                     </div>
-
-                    {/* Services Preview */}
-                    {services.length > 0 && (
-                      <div className="flex gap-2 mt-3">
-                        {services.map((service) => (
-                          <Badge key={service.type} variant="inactive" className="text-xs">
-                            {service.type === "standard" && "Standard"}
-                            {service.type === "express" && "Express"}
-                            {service.type === "deep" && "Deep Clean"}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
                   </Card>
                 </Link>
-              );
-            })}
+              ))}
           </div>
         )}
       </div>

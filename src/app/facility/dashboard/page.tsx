@@ -8,8 +8,8 @@ import {
   getFacilityOrders,
   getFacilityStats,
 } from "@/lib/facility/actions";
-import { formatCurrency, getRelativeTime } from "@/lib/utils";
-import { SERVICE_TYPES, ORDER_STATUSES } from "@/config/constants";
+import { formatCurrency, getRelativeTime, getServiceName } from "@/lib/utils";
+import { ORDER_STATUSES } from "@/config/constants";
 import { OrderActionButtons } from "./order-actions";
 
 export default async function FacilityDashboardPage() {
@@ -105,8 +105,7 @@ export default async function FacilityDashboardPage() {
             {activeOrders.slice(0, 5).map((order) => {
               const statusInfo =
                 ORDER_STATUSES[order.status as keyof typeof ORDER_STATUSES];
-              const serviceInfo =
-                SERVICE_TYPES[order.service_type as keyof typeof SERVICE_TYPES];
+              const serviceName = getServiceName(order.service_type);
               const driverName =
                 order.driver?.profile?.full_name || "Unknown Driver";
 
@@ -132,7 +131,7 @@ export default async function FacilityDashboardPage() {
                       </div>
                       <p className="text-sm text-gray-500 mt-1">{driverName}</p>
                       <p className="text-sm text-gray-500">
-                        {serviceInfo?.name} - {serviceInfo?.duration}
+                        {serviceName}
                       </p>
                     </div>
                     <div className="text-right">

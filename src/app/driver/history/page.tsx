@@ -2,8 +2,7 @@ import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getDriver, getDriverOrders } from "@/lib/driver/actions";
-import { formatCurrency, formatDate, getRelativeTime } from "@/lib/utils";
-import { SERVICE_TYPES } from "@/config/constants";
+import { formatCurrency, formatDate, getRelativeTime, getServiceName } from "@/lib/utils";
 
 export default async function HistoryPage() {
   const { data: driver } = await getDriver();
@@ -163,10 +162,7 @@ export default async function HistoryPage() {
             <div key={month}>
               <h3 className="text-lg font-semibold text-gray-900 mb-3">{month}</h3>
               <div className="space-y-3">
-                {monthOrders.map((order) => {
-                  const serviceInfo = SERVICE_TYPES[order.service_type as keyof typeof SERVICE_TYPES];
-
-                  return (
+                {monthOrders.map((order) => (
                     <Link key={order.id} href={`/driver/orders/${order.id}`}>
                       <Card variant="clickable" className="p-4">
                         <div className="flex items-start justify-between">
@@ -175,7 +171,7 @@ export default async function HistoryPage() {
                               {order.facility?.name || "Cleaning Facility"}
                             </h4>
                             <p className="text-sm text-gray-500">
-                              {serviceInfo?.name || order.service_type}
+                              {getServiceName(order.service_type)}
                             </p>
                             <p className="text-xs text-gray-400 mt-1">
                               {formatDate(order.completed_at || order.created_at)}
@@ -194,8 +190,7 @@ export default async function HistoryPage() {
                         </div>
                       </Card>
                     </Link>
-                  );
-                })}
+                ))}
               </div>
             </div>
           ))}

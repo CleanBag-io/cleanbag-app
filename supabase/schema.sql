@@ -48,10 +48,10 @@ CREATE TABLE IF NOT EXISTS public.facilities (
   longitude DECIMAL(11, 8),
   phone TEXT,
   operating_hours JSONB DEFAULT '{}',
-  services JSONB NOT NULL DEFAULT '[]',
+  services JSONB NOT NULL DEFAULT '[{"type": "standard", "price": 4.50, "duration": 20}]',
   rating DECIMAL(2, 1) NOT NULL DEFAULT 0.0,
   total_orders INTEGER NOT NULL DEFAULT 0,
-  commission_rate DECIMAL(4, 3) NOT NULL DEFAULT 0.150,
+  commission_rate DECIMAL(4, 3) NOT NULL DEFAULT 0.471,
   stripe_account_id TEXT,
   is_active BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -326,6 +326,15 @@ CREATE POLICY "Drivers can update own orders"
 CREATE POLICY "Facilities can view own transactions"
   ON public.transactions FOR SELECT
   USING (
+    facility_id IN (
+      SELECT id FROM public.facilities WHERE user_id = auth.uid()
+    )
+  );
+
+-- Facilities can insert transactions (for order completion)
+CREATE POLICY "Facilities can insert transactions"
+  ON public.transactions FOR INSERT
+  WITH CHECK (
     facility_id IN (
       SELECT id FROM public.facilities WHERE user_id = auth.uid()
     )

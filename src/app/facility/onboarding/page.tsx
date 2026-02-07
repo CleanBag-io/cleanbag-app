@@ -113,7 +113,7 @@ export default function FacilityOnboardingPage() {
                     <li>- Access to delivery drivers in your area</li>
                     <li>- Easy order management dashboard</li>
                     <li>- Automatic revenue tracking</li>
-                    <li>- 15% commission on completed orders</li>
+                    <li>- You earn per cleaning completed</li>
                   </ul>
                 </div>
               </div>
@@ -179,7 +179,7 @@ export default function FacilityOnboardingPage() {
 
                 <div className="p-4 bg-brand-pink-light rounded-lg">
                   <p className="text-sm text-gray-700">
-                    <span className="font-medium">Default services:</span> Standard, Express, and Deep Clean will be enabled at standard prices. Contact support to customize.
+                    <span className="font-medium">Default service:</span> Clean Delivery Bag at €4.50. You earn €2.38 per cleaning.
                   </p>
                 </div>
               </div>

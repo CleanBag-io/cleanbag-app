@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { SERVICE_TYPES } from "@/config/constants";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -65,4 +66,16 @@ export function getRelativeTime(date: Date | string | null): string {
   if (days < 14) return "1 week ago";
   if (days < 30) return `${Math.floor(days / 7)} weeks ago`;
   return formatDate(d);
+}
+
+const LEGACY_SERVICE_NAMES: Record<string, string> = {
+  express: "Express Clean",
+  deep: "Deep Clean",
+};
+
+export function getServiceName(serviceType: string): string {
+  if (serviceType in SERVICE_TYPES) {
+    return SERVICE_TYPES[serviceType as keyof typeof SERVICE_TYPES].name;
+  }
+  return LEGACY_SERVICE_NAMES[serviceType] || serviceType;
 }

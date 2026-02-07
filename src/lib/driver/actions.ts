@@ -2,8 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { stripe } from "@/lib/stripe/client";
+import { createRefund } from "@/lib/stripe/actions";
 import type { Driver, Order, Facility } from "@/types";
-import type { City, ServiceType } from "@/config/constants";
+import type { City } from "@/config/constants";
 import { PRICING, COMMISSION_RATES } from "@/config/constants";
 
 export type ActionResult<T = void> = {
@@ -147,8 +149,8 @@ export async function getFacility(
   return { data: facility };
 }
 
-// Create a new order (booking)
-export async function createOrder(formData: FormData): Promise<ActionResult<Order>> {
+// Create a new order (booking) — returns clientSecret for Stripe payment
+export async function createOrder(formData: FormData): Promise<ActionResult<Order & { clientSecret?: string }>> {
   const supabase = await createClient();
 
   const {
@@ -171,16 +173,15 @@ export async function createOrder(formData: FormData): Promise<ActionResult<Orde
   }
 
   const facilityId = formData.get("facility_id") as string;
-  const serviceType = formData.get("service_type") as ServiceType;
 
-  if (!facilityId || !serviceType) {
-    return { error: "Facility and service type are required" };
+  if (!facilityId) {
+    return { error: "Facility is required" };
   }
 
   // Get facility to calculate pricing
   const { data: facility, error: facilityError } = await supabase
     .from("facilities")
-    .select("commission_rate, services")
+    .select("commission_rate")
     .eq("id", facilityId)
     .single();
 
@@ -188,16 +189,10 @@ export async function createOrder(formData: FormData): Promise<ActionResult<Orde
     return { error: "Facility not found" };
   }
 
-  // Calculate pricing
-  const basePriceMap: Record<ServiceType, number> = {
-    standard: PRICING.standardClean,
-    express: PRICING.expressClean,
-    deep: PRICING.deepClean,
-  };
-
-  const basePrice = basePriceMap[serviceType];
+  // Calculate pricing — single service model
+  const basePrice = PRICING.bagClean;
   const commissionRate = facility.commission_rate || COMMISSION_RATES.default;
-  const commissionAmount = basePrice * commissionRate;
+  const commissionAmount = Math.round(basePrice * commissionRate * 100) / 100;
   const totalPrice = basePrice;
 
   const { data: order, error } = await supabase
@@ -205,7 +200,7 @@ export async function createOrder(formData: FormData): Promise<ActionResult<Orde
     .insert({
       driver_id: driver.id,
       facility_id: facilityId,
-      service_type: serviceType,
+      service_type: "standard",
       base_price: basePrice,
       commission_amount: commissionAmount,
       total_price: totalPrice,
@@ -219,8 +214,35 @@ export async function createOrder(formData: FormData): Promise<ActionResult<Orde
     return { error: error.message };
   }
 
+  // Create Stripe PaymentIntent for upfront payment
+  let clientSecret: string | undefined;
+  if (stripe) {
+    try {
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: Math.round(totalPrice * 100), // cents
+        currency: "eur",
+        metadata: {
+          order_id: order.id,
+          facility_id: facilityId,
+        },
+        transfer_group: order.id,
+      });
+
+      clientSecret = paymentIntent.client_secret ?? undefined;
+
+      // Save PaymentIntent ID on the order
+      await supabase
+        .from("orders")
+        .update({ stripe_payment_intent_id: paymentIntent.id })
+        .eq("id", order.id);
+    } catch (err) {
+      console.error("Stripe PaymentIntent creation failed:", err);
+      // Order is created but payment failed — return order without clientSecret
+    }
+  }
+
   revalidatePath("/driver/orders", "page");
-  return { data: order };
+  return { data: { ...order, clientSecret } };
 }
 
 // Get driver's orders
@@ -322,7 +344,7 @@ export async function cancelOrder(orderId: string): Promise<ActionResult> {
   // Verify the order belongs to this driver and is cancellable
   const { data: order } = await supabase
     .from("orders")
-    .select("status")
+    .select("status, payment_status, stripe_payment_intent_id")
     .eq("id", orderId)
     .eq("driver_id", driver.id)
     .single();
@@ -335,12 +357,21 @@ export async function cancelOrder(orderId: string): Promise<ActionResult> {
     return { error: "Only pending orders can be cancelled" };
   }
 
+  // If paid, issue Stripe refund
+  if (order.payment_status === "paid" && order.stripe_payment_intent_id) {
+    const refundResult = await createRefund(orderId);
+    if (refundResult.error) {
+      return { error: `Cancellation failed: ${refundResult.error}` };
+    }
+  }
+
   const { error } = await supabase
     .from("orders")
     .update({
       status: "cancelled",
       cancelled_at: new Date().toISOString(),
       cancellation_reason: "Cancelled by driver",
+      payment_status: order.payment_status === "paid" ? "refunded" : order.payment_status,
     })
     .eq("id", orderId);
 

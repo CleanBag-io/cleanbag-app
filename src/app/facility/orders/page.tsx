@@ -5,8 +5,8 @@ import {
   getCurrentFacility,
   getFacilityOrders,
 } from "@/lib/facility/actions";
-import { formatCurrency, formatDateTime } from "@/lib/utils";
-import { SERVICE_TYPES, ORDER_STATUSES } from "@/config/constants";
+import { formatCurrency, formatDateTime, getServiceName } from "@/lib/utils";
+import { ORDER_STATUSES } from "@/config/constants";
 import { OrderActionButtons } from "../dashboard/order-actions";
 import { OrderFilters } from "./order-filters";
 import type { Order, Driver, Profile } from "@/types";
@@ -127,7 +127,7 @@ function OrderCard({
   if (!order) return null;
 
   const statusInfo = ORDER_STATUSES[order.status as keyof typeof ORDER_STATUSES];
-  const serviceInfo = SERVICE_TYPES[order.service_type as keyof typeof SERVICE_TYPES];
+  const serviceName = getServiceName(order.service_type);
   const driverName = order.driver?.profile?.full_name || "Unknown Driver";
 
   const badgeVariant =
@@ -155,7 +155,7 @@ function OrderCard({
           </div>
           <p className="text-sm text-gray-600 mt-1">{driverName}</p>
           <p className="text-sm text-gray-500">
-            {serviceInfo?.name} - {serviceInfo?.duration}
+            {serviceName}
           </p>
           {order.driver?.vehicle_type && (
             <p className="text-xs text-gray-400 mt-1">

@@ -3,8 +3,8 @@ import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getOrder } from "@/lib/driver/actions";
-import { formatCurrency, formatDateTime } from "@/lib/utils";
-import { SERVICE_TYPES, ORDER_STATUSES } from "@/config/constants";
+import { formatCurrency, formatDateTime, getServiceName } from "@/lib/utils";
+import { ORDER_STATUSES } from "@/config/constants";
 import { OrderActions } from "./order-actions";
 
 interface PageProps {
@@ -20,7 +20,7 @@ export default async function OrderDetailPage({ params }: PageProps) {
   }
 
   const statusInfo = ORDER_STATUSES[order.status as keyof typeof ORDER_STATUSES];
-  const serviceInfo = SERVICE_TYPES[order.service_type as keyof typeof SERVICE_TYPES];
+  const serviceName = getServiceName(order.service_type);
 
   const badgeVariant =
     order.status === "completed"
@@ -176,11 +176,11 @@ export default async function OrderDetailPage({ params }: PageProps) {
           <div className="space-y-4">
             <div className="flex justify-between py-2 border-b border-gray-100">
               <span className="text-gray-600">Service</span>
-              <span className="font-medium">{serviceInfo?.name || order.service_type}</span>
+              <span className="font-medium">{serviceName}</span>
             </div>
             <div className="flex justify-between py-2 border-b border-gray-100">
               <span className="text-gray-600">Duration</span>
-              <span className="font-medium">{serviceInfo?.duration || "15-20 min"}</span>
+              <span className="font-medium">15-20 min</span>
             </div>
             <div className="flex justify-between py-2 border-b border-gray-100">
               <span className="text-gray-600">Cleaning Facility</span>

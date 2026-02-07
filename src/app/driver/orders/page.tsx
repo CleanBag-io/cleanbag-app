@@ -3,8 +3,8 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getDriverOrders } from "@/lib/driver/actions";
-import { formatCurrency, formatDateTime } from "@/lib/utils";
-import { SERVICE_TYPES, ORDER_STATUSES } from "@/config/constants";
+import { formatCurrency, formatDateTime, getServiceName } from "@/lib/utils";
+import { ORDER_STATUSES } from "@/config/constants";
 
 export default async function OrdersPage() {
   const { data: orders, error } = await getDriverOrders();
@@ -113,7 +113,7 @@ interface Order {
 
 function OrderCard({ order }: { order: Order }) {
   const statusInfo = ORDER_STATUSES[order.status as keyof typeof ORDER_STATUSES];
-  const serviceInfo = SERVICE_TYPES[order.service_type as keyof typeof SERVICE_TYPES];
+  const serviceName = getServiceName(order.service_type);
 
   const badgeVariant =
     order.status === "completed"
@@ -147,7 +147,7 @@ function OrderCard({ order }: { order: Order }) {
         <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
           <div>
             <p className="text-sm text-gray-600">
-              {serviceInfo?.name || order.service_type}
+              {serviceName}
             </p>
             <p className="text-xs text-gray-400">
               {formatDateTime(order.created_at)}

@@ -13,19 +13,36 @@ interface StripeConnectSectionProps {
   stripeAccountId: string | null;
 }
 
+interface AccountStatus {
+  detailsSubmitted: boolean;
+  chargesEnabled: boolean;
+  payoutsEnabled: boolean;
+  requirements: string[];
+}
+
 export function StripeConnectSection({
   facilityId,
   stripeAccountId,
 }: StripeConnectSectionProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [detailsSubmitted, setDetailsSubmitted] = useState(false);
+  const [status, setStatus] = useState<AccountStatus>({
+    detailsSubmitted: false,
+    chargesEnabled: false,
+    payoutsEnabled: false,
+    requirements: [],
+  });
 
   useEffect(() => {
     if (stripeAccountId && facilityId) {
       getConnectAccountStatus(facilityId).then((result) => {
         if (result.data) {
-          setDetailsSubmitted(result.data.detailsSubmitted);
+          setStatus({
+            detailsSubmitted: result.data.detailsSubmitted,
+            chargesEnabled: result.data.chargesEnabled,
+            payoutsEnabled: result.data.payoutsEnabled,
+            requirements: result.data.requirements,
+          });
         }
       });
     }
@@ -35,21 +52,29 @@ export function StripeConnectSection({
     setLoading(true);
     setError(null);
 
-    const result = await createConnectAccountLink();
+    try {
+      const result = await createConnectAccountLink();
 
-    if (result.error) {
-      setError(result.error);
+      if (result.error) {
+        setError(result.error);
+        setLoading(false);
+        return;
+      }
+
+      if (result.data?.url) {
+        window.location.href = result.data.url;
+      } else {
+        setError("No redirect URL received from Stripe");
+        setLoading(false);
+      }
+    } catch (err) {
+      setError("Failed to connect with Stripe. Please try again.");
       setLoading(false);
-      return;
-    }
-
-    if (result.data?.url) {
-      window.location.href = result.data.url;
     }
   };
 
-  // Fully connected
-  if (stripeAccountId && detailsSubmitted) {
+  // Fully connected — details submitted and both charges + payouts enabled
+  if (stripeAccountId && status.detailsSubmitted && status.chargesEnabled && status.payoutsEnabled) {
     return (
       <div className="space-y-3">
         <div className="flex items-center gap-3">
@@ -65,16 +90,28 @@ export function StripeConnectSection({
     );
   }
 
-  // Account created but setup incomplete
-  if (stripeAccountId && !detailsSubmitted) {
+  // Account created but setup incomplete (details submitted but capabilities pending, or details not submitted)
+  if (stripeAccountId) {
     return (
       <div className="space-y-3">
         <div className="flex items-center gap-3">
           <Badge variant="warning">Setup Incomplete</Badge>
           <span className="text-sm text-gray-600">
-            Complete your Stripe account setup to receive payouts.
+            {status.detailsSubmitted
+              ? "Your account is being reviewed by Stripe."
+              : "Complete your Stripe account setup to receive payouts."}
           </span>
         </div>
+        {status.detailsSubmitted && !status.chargesEnabled && (
+          <p className="text-xs text-gray-500">
+            Stripe is verifying your account. This usually takes 1-2 business days.
+          </p>
+        )}
+        {status.requirements.length > 0 && (
+          <p className="text-xs text-gray-500">
+            {status.requirements.length} item{status.requirements.length > 1 ? "s" : ""} still needed to complete setup.
+          </p>
+        )}
         {error && (
           <p className="text-sm text-red-500">{error}</p>
         )}

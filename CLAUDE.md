@@ -45,16 +45,27 @@ src/
 │   │   └── onboarding/     # Facility setup wizard
 │   ├── api/
 │   │   └── webhooks/stripe/ # Stripe webhook handler
-│   ├── agency/             # Company management (/agency/*) - stub
-│   ├── admin/              # Admin panel (/admin/*) - stub
+│   ├── agency/             # Company management (/agency/*)
+│   │   ├── dashboard/      # Company home with compliance rate + driver stats
+│   │   ├── drivers/        # Driver list, pending requests, invite flow
+│   │   ├── compliance/     # Compliance overview + CSV export
+│   │   ├── reports/        # Cleaning activity + per-driver breakdown
+│   │   └── onboarding/     # Company setup wizard (name, city, compliance target)
+│   ├── admin/              # Admin panel (/admin/*)
+│   │   ├── dashboard/      # Live stats + recent transactions
+│   │   ├── facilities/     # Facility management with toggle active
+│   │   ├── transactions/   # Filterable transaction table
+│   │   └── analytics/      # Revenue + order charts with period selector
 │   └── globals.css         # Design tokens (Tailwind v4)
 ├── components/
 │   ├── ui/                 # Button, Card, Badge, Input, Select, Label
 │   └── layout/             # Sidebar, Header (with profile dropdown + logout), MobileNav
 ├── lib/
 │   ├── auth/               # Auth actions (login, register, logout, getUser, updateProfile)
-│   ├── driver/             # Driver server actions (CRUD, booking, payment)
+│   ├── driver/             # Driver server actions (CRUD, booking, payment, company flows)
 │   ├── facility/           # Facility server actions (orders, stats, revenue, transfers)
+│   ├── agency/             # Company server actions (drivers, requests, stats, compliance)
+│   ├── admin/              # Admin server actions (stats, facilities, transactions, analytics)
 │   ├── stripe/             # Stripe client + server actions (Connect, refunds)
 │   ├── supabase/           # client.ts, server.ts (incl. service role client), session.ts
 │   └── utils.ts            # cn(), formatCurrency(), formatDate(), getServiceName(), etc.
@@ -227,35 +238,45 @@ Brand colors available as Tailwind classes:
 - [x] Facility payout messaging: "You earn €X.XX per cleaning" instead of commission %
 - [x] Database migration: `supabase/migrations/001-sprint5-pricing.sql`
 
-### Sprint 6: Company & Admin Dashboards (PLANNED)
-> Full plan: `docs/SPRINT-6-PLAN.md`
+### Sprint 6: Company & Admin Dashboards ✅ COMPLETE
+> Full plan: `docs/SPRINT-6-PLAN.md` | E2E tests: `e2e/sprint6.spec.ts` (39 tests)
 
 **Part A — Driver-Company Association:**
-- [ ] New `agency_requests` table (migration 002) — tracks join requests + invitations
-- [ ] `AgencyRequest` type in `types/index.ts`
-- [ ] Agency server actions (`lib/agency/actions.ts`) — getAgency, upsertAgency, getAgencyDrivers, sendInvitation, respondToRequest, removeDriver, searchDrivers, getAgencyStats, getComplianceReport
-- [ ] Driver actions for company flows — getCompanies, sendJoinRequest, getMyRequests, respondToInvitation, cancelJoinRequest, leaveCompany
-- [ ] Driver profile page "Company" section (join/leave/pending requests UI)
-- [ ] Company drivers page with My Drivers + Pending tabs + Invite
+- [x] New `agency_requests` table (migration 002) — tracks join requests + invitations
+- [x] `AgencyRequest` type in `types/index.ts`
+- [x] Agency server actions (`lib/agency/actions.ts`) — getAgency, upsertAgency, getAgencyDrivers, sendInvitation, respondToRequest, removeDriver, searchDrivers, getAgencyStats, getComplianceReport
+- [x] Driver actions for company flows — getCompanies, sendJoinRequest, getMyRequests, respondToInvitation, cancelJoinRequest, leaveCompany
+- [x] Driver profile page "Company" section (join/leave/pending requests UI)
+- [x] Company drivers page with My Drivers + Pending tabs + Invite
 
 **Part B — Company Portal:**
-- [ ] Company onboarding (`/agency/onboarding`) — name, city, compliance target
-- [ ] Company dashboard (replace stub) — compliance rate, stats, drivers needing attention
-- [ ] Company drivers page (`/agency/drivers`) — driver list, requests, invitations
-- [ ] Company compliance page (`/agency/compliance`) — overview, table, export
-- [ ] Company reports page (`/agency/reports`) — activity, per-driver breakdown
+- [x] Company onboarding (`/agency/onboarding`) — name, city, compliance target
+- [x] Company dashboard (replace stub) — compliance rate, stats, drivers needing attention
+- [x] Company drivers page (`/agency/drivers`) — driver list, requests, invitations
+- [x] Company compliance page (`/agency/compliance`) — overview, table, export
+- [x] Company reports page (`/agency/reports`) — activity, per-driver breakdown
 
 **Part C — Admin Panel:**
-- [ ] Admin server actions (`lib/admin/actions.ts`) — getPlatformStats, getAllFacilities, updateFacilityStatus, getAllTransactions, getAnalytics
-- [ ] Admin dashboard (replace stub) — live stats, recent transactions
-- [ ] Admin facilities page (`/admin/facilities`) — management table with toggle active
-- [ ] Admin transactions page (`/admin/transactions`) — filterable table
-- [ ] Admin analytics page (`/admin/analytics`) — revenue + order charts
+- [x] Admin server actions (`lib/admin/actions.ts`) — getPlatformStats, getAllFacilities, updateFacilityStatus, getAllTransactions, getAnalytics
+- [x] Admin dashboard (replace stub) — live stats, recent transactions
+- [x] Admin facilities page (`/admin/facilities`) — management table with toggle active
+- [x] Admin transactions page (`/admin/transactions`) — filterable table
+- [x] Admin analytics page (`/admin/analytics`) — revenue + order charts
 
-**Part D — Google Maps:**
+**Part D — Google Maps:** (deferred to Sprint 7)
 - [ ] Install maps library, add `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`
 - [ ] Replace map placeholder on `/driver/facilities` with real Google Map + markers
 - [ ] Add map to facility detail page (if lat/lng present)
+
+**RLS Policies (migration 002):**
+- [x] `agency_requests` table RLS — drivers/agencies can view, create, update their own requests
+- [x] "Agencies can search drivers by city" — uses `profiles` role check (not agencies table) to avoid circular RLS
+- [x] "Drivers can browse agencies" — uses `profiles` role check (not drivers table) to avoid circular RLS
+- [x] "Agencies can update driver affiliation" — allows accept/remove on `drivers.agency_id`
+- [x] "Authenticated users can read profiles" — cross-role name visibility
+
+**E2E Tests:**
+- [x] 39 Playwright tests covering all features (auth, onboarding, association, portal, admin, profile)
 - [ ] (Optional) Lat/lng capture in facility onboarding/settings
 
 ### Future Sprints
@@ -268,11 +289,63 @@ Brand colors available as Tailwind classes:
 
 ## Commands
 ```bash
-pnpm dev      # Start dev server (http://localhost:3000)
-pnpm build    # Production build
-pnpm start    # Run production build
-pnpm lint     # Run ESLint
+pnpm dev                                    # Start dev server (http://localhost:3000)
+pnpm build                                  # Production build
+pnpm start                                  # Run production build
+pnpm lint                                   # Run ESLint
+npx playwright test e2e/sprint6.spec.ts     # Run E2E tests (39 tests, ~3 min)
+npx playwright test e2e/sprint6.spec.ts -g "8. Admin"  # Run specific section
 ```
+
+### Claude Code Slash Commands
+- `/test` — Run the full E2E test suite, diagnose failures, fix and re-run
+- `/update-tests` — Update E2E tests for new or changed features
+
+## E2E Testing
+
+### Overview
+39 Playwright E2E tests covering all Sprint 6 features. Tests run serially against the dev server using 4 temporary test accounts created via Supabase Admin API.
+
+### Architecture
+```
+e2e/
+  helpers.ts          # supabaseAdmin, createTestUser(), login(), ACCOUNTS, TEST_CITY
+  global-setup.ts     # Creates 4 accounts before all tests
+  global-teardown.ts  # Deletes accounts after all tests
+  sprint6.spec.ts     # 39 tests in 10 serial sections
+playwright.config.ts  # Single worker, 60s timeout, auto-starts dev server
+```
+
+### Test Accounts
+| Role | Email | Name |
+|------|-------|------|
+| driver | e2e-driver@test.com | E2E Driver |
+| facility | e2e-facility@test.com | E2E Facility |
+| agency | e2e-agency@test.com | E2E Company |
+| admin | e2e-admin@test.com | E2E Admin |
+
+### Test Sections (39 tests)
+1. **Auth & Login** (5) — Login all roles + unauthenticated redirect
+2. **Driver Onboarding** (2) — Wizard + dashboard
+3. **Facility Onboarding** (1) — Wizard
+4. **Company Onboarding** (4) — Redirect, wizard, dashboard, redirect after
+5. **Driver-Company Association** (6) — Join request, accept, affiliated, leave
+6. **Company Invitation Flow** (2) — Invite + accept
+7. **Company Portal Pages** (5) — Compliance, CSV, reports, drivers, sidebar
+8. **Admin Panel** (8) — Dashboard, facilities, toggle, filters, transactions, analytics, nav
+9. **Company Driver Management** (5) — Re-associate, accept, stats, compliance, remove
+10. **Driver Profile** (1) — All sections visible
+
+### Prerequisites
+- `.env.local` with all Supabase credentials including `SUPABASE_SERVICE_ROLE_KEY`
+- Playwright installed (`pnpm install` includes it as devDependency)
+- Port 3000 free (Playwright auto-starts dev server) or dev server running
+
+### Troubleshooting
+- **Stale accounts**: Delete e2e-* users in Supabase Auth dashboard if globalTeardown didn't run
+- **Strict mode violations**: Use specific selectors (`p:has-text(...)`, `h2:has-text(...)`) instead of `text=...`
+- **SSR timing**: Add `{ timeout: 15000 }` to `toHaveText` assertions on server-rendered pages
+- **RLS errors**: Never create cross-table policies between drivers↔agencies — use profiles for role checks
 
 ## Terminology Conventions
 

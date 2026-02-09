@@ -100,6 +100,16 @@ NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
 STRIPE_WEBHOOK_SECRET=whsec_...
 ```
 
+### Stripe Environment Setup
+- Stripe uses **Sandbox** mode (rebranded from "test mode") — sandbox keys are different from old test mode keys
+- Keys must come from the Stripe Dashboard with **Sandbox** toggle enabled
+- Connect must be enabled in Sandbox mode: Dashboard → Settings → Connect (Marketplace model)
+- **Webhook** configured in Sandbox → Developers → Webhooks for `https://cleanbag.io/api/webhooks/stripe`
+  - Events: `payment_intent.succeeded`, `account.updated`
+  - The webhook signing secret (`whsec_...`) is specific to each endpoint (dashboard vs CLI)
+- **Local dev** uses a different webhook secret from `stripe listen --forward-to localhost:3000/api/webhooks/stripe`
+- All three Stripe env vars (`STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`) are set in both `.env.local` and Vercel (Production + Preview scopes)
+
 ### Deployment Environments
 | Env | `NEXT_PUBLIC_SITE_URL` | Notes |
 |---|---|---|
@@ -164,7 +174,11 @@ Brand colors available as Tailwind classes:
 - Commission stored per facility (`commission_rate`); default 0.471 (CleanBag keeps €2.12)
 - Driver pays upfront at booking — `createOrder()` creates PaymentIntent, returns `clientSecret`
 - Booking form is two-step: service summary → PaymentElement (Stripe)
-- Stripe Connect Standard for facilities — onboarding via `createConnectAccountLink()`
+- Stripe Connect for facilities (Marketplace model) — onboarding via `createConnectAccountLink()`
+- Account creation uses modern `controller` object (`stripe_dashboard: full`) with explicit `capabilities` and `country: "CY"` — do NOT use deprecated `type: "standard"` param
+- `fees`/`losses` controller params are incompatible with `stripe_dashboard: full` — only for Custom/Express accounts
+- Status checking returns `chargesEnabled`, `payoutsEnabled`, `requirements` (pending items) in addition to `detailsSubmitted`
+- Connected state requires all three: `detailsSubmitted` + `chargesEnabled` + `payoutsEnabled`
 - Transfers to facility on order completion via `completeOrder()`
 - Webhook at `/api/webhooks/stripe` handles `payment_intent.succeeded` and `account.updated`
 - Stripe client is `null` if `STRIPE_SECRET_KEY` is not set — code gracefully degrades

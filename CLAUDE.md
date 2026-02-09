@@ -227,8 +227,38 @@ Brand colors available as Tailwind classes:
 - [x] Facility payout messaging: "You earn €X.XX per cleaning" instead of commission %
 - [x] Database migration: `supabase/migrations/001-sprint5-pricing.sql`
 
+### Sprint 6: Company & Admin Dashboards (PLANNED)
+> Full plan: `docs/SPRINT-6-PLAN.md`
+
+**Part A — Driver-Company Association:**
+- [ ] New `agency_requests` table (migration 002) — tracks join requests + invitations
+- [ ] `AgencyRequest` type in `types/index.ts`
+- [ ] Agency server actions (`lib/agency/actions.ts`) — getAgency, upsertAgency, getAgencyDrivers, sendInvitation, respondToRequest, removeDriver, searchDrivers, getAgencyStats, getComplianceReport
+- [ ] Driver actions for company flows — getCompanies, sendJoinRequest, getMyRequests, respondToInvitation, cancelJoinRequest, leaveCompany
+- [ ] Driver profile page "Company" section (join/leave/pending requests UI)
+- [ ] Company drivers page with My Drivers + Pending tabs + Invite
+
+**Part B — Company Portal:**
+- [ ] Company onboarding (`/agency/onboarding`) — name, city, compliance target
+- [ ] Company dashboard (replace stub) — compliance rate, stats, drivers needing attention
+- [ ] Company drivers page (`/agency/drivers`) — driver list, requests, invitations
+- [ ] Company compliance page (`/agency/compliance`) — overview, table, export
+- [ ] Company reports page (`/agency/reports`) — activity, per-driver breakdown
+
+**Part C — Admin Panel:**
+- [ ] Admin server actions (`lib/admin/actions.ts`) — getPlatformStats, getAllFacilities, updateFacilityStatus, getAllTransactions, getAnalytics
+- [ ] Admin dashboard (replace stub) — live stats, recent transactions
+- [ ] Admin facilities page (`/admin/facilities`) — management table with toggle active
+- [ ] Admin transactions page (`/admin/transactions`) — filterable table
+- [ ] Admin analytics page (`/admin/analytics`) — revenue + order charts
+
+**Part D — Google Maps:**
+- [ ] Install maps library, add `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`
+- [ ] Replace map placeholder on `/driver/facilities` with real Google Map + markers
+- [ ] Add map to facility detail page (if lat/lng present)
+- [ ] (Optional) Lat/lng capture in facility onboarding/settings
+
 ### Future Sprints
-- Sprint 6: Company & Admin dashboards
 - Sprint 7: Notifications, PWA, polish
 
 ## Reference Files

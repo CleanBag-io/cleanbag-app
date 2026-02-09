@@ -43,7 +43,16 @@ export async function createConnectAccountLink(): Promise<
     // Create Stripe Connect account if it doesn't exist
     if (!accountId) {
       const account = await stripe.accounts.create({
-        type: "standard",
+        country: "CY",
+        controller: {
+          stripe_dashboard: { type: "full" },
+          fees: { payer: "application" },
+          losses: { payments: "application" },
+        },
+        capabilities: {
+          card_payments: { requested: true },
+          transfers: { requested: true },
+        },
         metadata: { facility_id: facility.id },
       });
 
@@ -76,9 +85,25 @@ export async function createConnectAccountLink(): Promise<
 // Check if a facility's Stripe account is fully onboarded
 export async function getConnectAccountStatus(
   facilityId: string
-): Promise<ActionResult<{ connected: boolean; detailsSubmitted: boolean }>> {
+): Promise<
+  ActionResult<{
+    connected: boolean;
+    detailsSubmitted: boolean;
+    chargesEnabled: boolean;
+    payoutsEnabled: boolean;
+    requirements: string[];
+  }>
+> {
   if (!stripe) {
-    return { data: { connected: false, detailsSubmitted: false } };
+    return {
+      data: {
+        connected: false,
+        detailsSubmitted: false,
+        chargesEnabled: false,
+        payoutsEnabled: false,
+        requirements: [],
+      },
+    };
   }
 
   const supabase = await createClient();
@@ -90,17 +115,41 @@ export async function getConnectAccountStatus(
     .single();
 
   if (!facility?.stripe_account_id) {
-    return { data: { connected: false, detailsSubmitted: false } };
+    return {
+      data: {
+        connected: false,
+        detailsSubmitted: false,
+        chargesEnabled: false,
+        payoutsEnabled: false,
+        requirements: [],
+      },
+    };
   }
 
-  const account = await stripe.accounts.retrieve(facility.stripe_account_id);
+  try {
+    const account = await stripe.accounts.retrieve(facility.stripe_account_id);
 
-  return {
-    data: {
-      connected: true,
-      detailsSubmitted: account.details_submitted ?? false,
-    },
-  };
+    return {
+      data: {
+        connected: true,
+        detailsSubmitted: account.details_submitted ?? false,
+        chargesEnabled: account.charges_enabled ?? false,
+        payoutsEnabled: account.payouts_enabled ?? false,
+        requirements: account.requirements?.currently_due ?? [],
+      },
+    };
+  } catch (err) {
+    console.error("Stripe account status error:", err);
+    return {
+      data: {
+        connected: false,
+        detailsSubmitted: false,
+        chargesEnabled: false,
+        payoutsEnabled: false,
+        requirements: [],
+      },
+    };
+  }
 }
 
 // Create a refund for a cancelled order

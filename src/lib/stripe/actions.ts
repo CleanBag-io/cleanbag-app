@@ -46,8 +46,6 @@ export async function createConnectAccountLink(): Promise<
         country: "CY",
         controller: {
           stripe_dashboard: { type: "full" },
-          fees: { payer: "application" },
-          losses: { payments: "application" },
         },
         capabilities: {
           card_payments: { requested: true },

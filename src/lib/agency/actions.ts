@@ -49,7 +49,9 @@ export async function upsertAgency(formData: FormData): Promise<ActionResult> {
 
   const name = formData.get("name") as string;
   const city = formData.get("city") as City;
-  const complianceTarget = parseInt(formData.get("compliance_target") as string) || 80;
+  const complianceTargetPct = parseInt(formData.get("compliance_target") as string) || 80;
+  // DB stores as DECIMAL(3,2), e.g. 0.80 for 80%
+  const complianceTarget = complianceTargetPct / 100;
 
   if (!name || !city) {
     return { error: "Company name and city are required" };
@@ -503,7 +505,7 @@ export async function getAgencyStats(): Promise<
       warningDrivers,
       overdueDrivers,
       complianceRate,
-      complianceTarget: agency.compliance_target,
+      complianceTarget: Math.round(agency.compliance_target * 100),
       pendingRequests: pendingRequests || 0,
     },
   };

@@ -93,6 +93,20 @@ export interface Transaction {
   created_at: string;
 }
 
+export interface AgencyRequest {
+  id: string;
+  agency_id: string;
+  driver_id: string;
+  initiated_by: "driver" | "agency";
+  status: "pending" | "accepted" | "rejected" | "cancelled";
+  message: string | null;
+  responded_at: string | null;
+  created_at: string;
+  // Joined fields (for display)
+  agency?: Agency;
+  driver?: Driver & { profile?: Profile };
+}
+
 export interface Notification {
   id: string;
   user_id: string;

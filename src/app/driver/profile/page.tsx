@@ -4,14 +4,36 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getUser } from "@/lib/auth/actions";
-import { getDriver } from "@/lib/driver/actions";
+import { getDriver, getCompanies, getMyRequests } from "@/lib/driver/actions";
 import { formatDate, getRelativeTime } from "@/lib/utils";
 import { ProfileForm } from "./profile-form";
 import { LogoutButton } from "./logout-button";
+import { CompanySection } from "./company-section";
 
 export default async function ProfilePage() {
   const profile = await getUser();
   const { data: driver } = await getDriver();
+
+  // Fetch company data for the driver
+  let currentAgency = null;
+  let requests: Awaited<ReturnType<typeof getMyRequests>>["data"] = [];
+  let availableCompanies: Awaited<ReturnType<typeof getCompanies>>["data"] = [];
+
+  if (driver) {
+    if (driver.agency_id) {
+      // Fetch the agency record
+      const { data: agencies } = await getCompanies();
+      currentAgency = agencies?.find((a) => a.id === driver.agency_id) || null;
+    } else {
+      // Fetch pending requests and available companies
+      const [reqResult, compResult] = await Promise.all([
+        getMyRequests(),
+        getCompanies(driver.city),
+      ]);
+      requests = reqResult.data || [];
+      availableCompanies = compResult.data || [];
+    }
+  }
 
   if (!profile) {
     redirect("/login");
@@ -141,6 +163,15 @@ export default async function ProfilePage() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Company Section */}
+      {driver && (
+        <CompanySection
+          currentAgency={currentAgency}
+          requests={requests || []}
+          availableCompanies={availableCompanies || []}
+        />
       )}
 
       {/* No Driver Profile */}

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe/client";
 import { createRefund } from "@/lib/stripe/actions";
-import type { Driver, Order, Facility } from "@/types";
+import type { Driver, Order, Facility, Agency, AgencyRequest } from "@/types";
 import type { City } from "@/config/constants";
 import { PRICING, COMMISSION_RATES } from "@/config/constants";
 
@@ -416,5 +416,277 @@ export async function rateOrder(
   }
 
   revalidatePath("/driver/orders", "page");
+  return {};
+}
+
+// ─── Company-related actions ─────────────────────────────────────────
+
+// Get available companies (for driver to browse/request)
+export async function getCompanies(
+  city?: City
+): Promise<ActionResult<Agency[]>> {
+  const supabase = await createClient();
+
+  let query = supabase.from("agencies").select("*").order("name");
+
+  if (city) {
+    query = query.eq("city", city);
+  }
+
+  const { data: agencies, error } = await query;
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  return { data: agencies || [] };
+}
+
+// Send a join request to a company
+export async function sendJoinRequest(
+  agencyId: string,
+  message?: string
+): Promise<ActionResult> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  const { data: driver } = await supabase
+    .from("drivers")
+    .select("id, agency_id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!driver) {
+    return { error: "Driver profile not found" };
+  }
+
+  if (driver.agency_id) {
+    return { error: "You are already associated with a company" };
+  }
+
+  const { error } = await supabase.from("agency_requests").insert({
+    agency_id: agencyId,
+    driver_id: driver.id,
+    initiated_by: "driver",
+    message: message || null,
+  });
+
+  if (error) {
+    if (error.code === "23505") {
+      return { error: "You already have a pending request with this company" };
+    }
+    return { error: error.message };
+  }
+
+  revalidatePath("/driver/profile", "page");
+  return {};
+}
+
+// Get driver's pending requests and invitations
+export async function getMyRequests(): Promise<ActionResult<AgencyRequest[]>> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  const { data: driver } = await supabase
+    .from("drivers")
+    .select("id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!driver) {
+    return { data: [] };
+  }
+
+  const { data: requests, error } = await supabase
+    .from("agency_requests")
+    .select("*, agency:agencies(*)")
+    .eq("driver_id", driver.id)
+    .eq("status", "pending")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  return { data: requests || [] };
+}
+
+// Accept or reject an invitation from a company
+export async function respondToInvitation(
+  requestId: string,
+  accept: boolean
+): Promise<ActionResult> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  const { data: driver } = await supabase
+    .from("drivers")
+    .select("id, agency_id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!driver) {
+    return { error: "Driver profile not found" };
+  }
+
+  if (accept && driver.agency_id) {
+    return { error: "You are already associated with a company" };
+  }
+
+  // Get the request
+  const { data: request } = await supabase
+    .from("agency_requests")
+    .select("*")
+    .eq("id", requestId)
+    .eq("driver_id", driver.id)
+    .eq("status", "pending")
+    .eq("initiated_by", "agency")
+    .single();
+
+  if (!request) {
+    return { error: "Invitation not found or already resolved" };
+  }
+
+  const newStatus = accept ? "accepted" : "rejected";
+
+  const { error: updateError } = await supabase
+    .from("agency_requests")
+    .update({
+      status: newStatus,
+      responded_at: new Date().toISOString(),
+    })
+    .eq("id", requestId);
+
+  if (updateError) {
+    return { error: updateError.message };
+  }
+
+  // If accepted, set driver's agency_id
+  if (accept) {
+    const { error: driverError } = await supabase
+      .from("drivers")
+      .update({ agency_id: request.agency_id })
+      .eq("id", driver.id);
+
+    if (driverError) {
+      return { error: driverError.message };
+    }
+  }
+
+  revalidatePath("/driver/profile", "page");
+  revalidatePath("/agency", "layout");
+  return {};
+}
+
+// Cancel a pending join request
+export async function cancelJoinRequest(
+  requestId: string
+): Promise<ActionResult> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  const { data: driver } = await supabase
+    .from("drivers")
+    .select("id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!driver) {
+    return { error: "Driver profile not found" };
+  }
+
+  const { error } = await supabase
+    .from("agency_requests")
+    .update({
+      status: "cancelled",
+      responded_at: new Date().toISOString(),
+    })
+    .eq("id", requestId)
+    .eq("driver_id", driver.id)
+    .eq("status", "pending")
+    .eq("initiated_by", "driver");
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/driver/profile", "page");
+  return {};
+}
+
+// Leave current company
+export async function leaveCompany(): Promise<ActionResult> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  const { data: driver } = await supabase
+    .from("drivers")
+    .select("id, agency_id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!driver) {
+    return { error: "Driver profile not found" };
+  }
+
+  if (!driver.agency_id) {
+    return { error: "You are not associated with any company" };
+  }
+
+  // Cancel any pending requests
+  await supabase
+    .from("agency_requests")
+    .update({ status: "cancelled", responded_at: new Date().toISOString() })
+    .eq("agency_id", driver.agency_id)
+    .eq("driver_id", driver.id)
+    .eq("status", "pending");
+
+  // Remove affiliation
+  const { error } = await supabase
+    .from("drivers")
+    .update({ agency_id: null })
+    .eq("id", driver.id);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/driver/profile", "page");
+  revalidatePath("/agency", "layout");
   return {};
 }

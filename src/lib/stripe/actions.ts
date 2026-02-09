@@ -39,32 +39,38 @@ export async function createConnectAccountLink(): Promise<
 
   let accountId = facility.stripe_account_id;
 
-  // Create Stripe Connect account if it doesn't exist
-  if (!accountId) {
-    const account = await stripe.accounts.create({
-      type: "standard",
-      metadata: { facility_id: facility.id },
+  try {
+    // Create Stripe Connect account if it doesn't exist
+    if (!accountId) {
+      const account = await stripe.accounts.create({
+        type: "standard",
+        metadata: { facility_id: facility.id },
+      });
+
+      accountId = account.id;
+
+      // Save to DB
+      await supabase
+        .from("facilities")
+        .update({ stripe_account_id: accountId })
+        .eq("id", facility.id);
+    }
+
+    // Create account link for onboarding/setup
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+    const accountLink = await stripe.accountLinks.create({
+      account: accountId,
+      refresh_url: `${siteUrl}/facility/settings`,
+      return_url: `${siteUrl}/facility/settings`,
+      type: "account_onboarding",
     });
 
-    accountId = account.id;
-
-    // Save to DB
-    await supabase
-      .from("facilities")
-      .update({ stripe_account_id: accountId })
-      .eq("id", facility.id);
+    return { data: { url: accountLink.url } };
+  } catch (err) {
+    console.error("Stripe Connect error:", err);
+    const message = err instanceof Error ? err.message : "Failed to connect with Stripe";
+    return { error: message };
   }
-
-  // Create account link for onboarding/setup
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
-  const accountLink = await stripe.accountLinks.create({
-    account: accountId,
-    refresh_url: `${siteUrl}/facility/settings`,
-    return_url: `${siteUrl}/facility/settings`,
-    type: "account_onboarding",
-  });
-
-  return { data: { url: accountLink.url } };
 }
 
 // Check if a facility's Stripe account is fully onboarded

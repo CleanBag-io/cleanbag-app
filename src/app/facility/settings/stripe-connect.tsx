@@ -35,16 +35,24 @@ export function StripeConnectSection({
     setLoading(true);
     setError(null);
 
-    const result = await createConnectAccountLink();
+    try {
+      const result = await createConnectAccountLink();
 
-    if (result.error) {
-      setError(result.error);
+      if (result.error) {
+        setError(result.error);
+        setLoading(false);
+        return;
+      }
+
+      if (result.data?.url) {
+        window.location.href = result.data.url;
+      } else {
+        setError("No redirect URL received from Stripe");
+        setLoading(false);
+      }
+    } catch (err) {
+      setError("Failed to connect with Stripe. Please try again.");
       setLoading(false);
-      return;
-    }
-
-    if (result.data?.url) {
-      window.location.href = result.data.url;
     }
   };
 

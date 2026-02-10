@@ -9,6 +9,7 @@ import { formatDate, getRelativeTime } from "@/lib/utils";
 import { ProfileForm } from "./profile-form";
 import { LogoutButton } from "./logout-button";
 import { CompanySection } from "./company-section";
+import { ChangePasswordForm } from "@/components/change-password-form";
 
 export default async function ProfilePage() {
   const profile = await getUser();
@@ -191,6 +192,16 @@ export default async function ProfilePage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Change Password */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Change Password</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ChangePasswordForm />
+        </CardContent>
+      </Card>
 
       {/* Account Actions */}
       <Card>

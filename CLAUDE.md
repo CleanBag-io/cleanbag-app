@@ -54,18 +54,20 @@ src/
 │   ├── admin/              # Admin panel (/admin/*)
 │   │   ├── dashboard/      # Live stats + recent transactions
 │   │   ├── facilities/     # Facility management with toggle active
+│   │   │   └── create/     # Admin create facility account (form + credentials)
 │   │   ├── transactions/   # Filterable transaction table
 │   │   └── analytics/      # Revenue + order charts with period selector
 │   └── globals.css         # Design tokens (Tailwind v4)
 ├── components/
 │   ├── ui/                 # Button, Card, Badge, Input, Select, Label
-│   └── layout/             # Sidebar, Header (with profile dropdown + logout), MobileNav
+│   ├── layout/             # Sidebar, Header (with profile dropdown + logout), MobileNav
+│   └── change-password-form.tsx  # Shared change password form (used by driver, facility)
 ├── lib/
-│   ├── auth/               # Auth actions (login, register, logout, getUser, updateProfile)
+│   ├── auth/               # Auth actions (login, register, logout, getUser, updateProfile, changePassword)
 │   ├── driver/             # Driver server actions (CRUD, booking, payment, company flows)
 │   ├── facility/           # Facility server actions (orders, stats, revenue, transfers)
 │   ├── agency/             # Company server actions (drivers, requests, stats, compliance)
-│   ├── admin/              # Admin server actions (stats, facilities, transactions, analytics)
+│   ├── admin/              # Admin server actions (stats, facilities, transactions, analytics, createFacilityAccount)
 │   ├── stripe/             # Stripe client + server actions (Connect, refunds)
 │   ├── supabase/           # client.ts, server.ts (incl. service role client), session.ts
 │   └── utils.ts            # cn(), formatCurrency(), formatDate(), getServiceName(), etc.
@@ -185,6 +187,19 @@ Brand colors available as Tailwind classes:
 - Service role client (`createServiceRoleClient()`) used in webhooks to bypass RLS
 - Test locally: `stripe listen --forward-to localhost:3000/api/webhooks/stripe`
 
+### Admin Account Creation
+- Admin can create facility accounts via `/admin/facilities/create`
+- Uses `auth.admin.createUser()` with `email_confirm: true` (skips email verification)
+- Creates auth user + facility record in one action; rolls back auth user if facility insert fails
+- Returns temp credentials for admin to share with the facility owner
+- Facility owner should change password on first login via Settings > Change Password
+
+### Change Password
+- `changePassword()` in `lib/auth/actions.ts` — available to all logged-in users
+- Verifies current password by calling `signInWithPassword()` before allowing update
+- Shared `ChangePasswordForm` component used on driver profile and facility settings pages
+- Company and admin roles will get it when they have settings pages
+
 ### Layout System
 - Each role has its own layout with Sidebar (desktop) + MobileNav (mobile) + Header
 - Layouts are server components that fetch user profile and pass to Header
@@ -290,11 +305,27 @@ Brand colors available as Tailwind classes:
 - [x] "Authenticated users can read profiles" — cross-role name visibility
 
 **E2E Tests:**
-- [x] 39 Playwright tests covering all features (auth, onboarding, association, portal, admin, profile)
+- [x] 51 Playwright tests covering all features (auth, onboarding, association, portal, admin, profile, create facility, change password)
 - [ ] (Optional) Lat/lng capture in facility onboarding/settings
 
+### Post-Sprint 6: Admin Create Facility & Change Password ✅ COMPLETE
+
+**Admin Create Facility:**
+- [x] `createFacilityAccount` server action in `lib/admin/actions.ts` — creates auth user (email pre-confirmed via service role) + profile + facility record
+- [x] Admin create facility page (`/admin/facilities/create`) — form with contact name, email, temp password (Generate button), facility name, address, city, phone
+- [x] Success card shows credentials (email + temp password) for admin to share
+- [x] "Create Facility" button added to admin facilities list page
+- [x] E2E tests: 6 tests in section 11
+
+**Change Password (all roles):**
+- [x] `changePassword` server action in `lib/auth/actions.ts` — verifies current password via `signInWithPassword`, then `updateUser`
+- [x] Shared `ChangePasswordForm` component (`src/components/change-password-form.tsx`)
+- [x] Added to facility settings page (after Account card)
+- [x] Added to driver profile page (before Account/Logout card)
+- [x] E2E tests: 6 tests in section 12
+
 ### Future Sprints
-- Sprint 7: Notifications, PWA, polish
+- Sprint 7: Notifications, PWA, polish, Google Maps
 
 ## Reference Files
 - Prototype (for UI patterns): `../cleanbag-prototype/`
@@ -307,8 +338,9 @@ pnpm dev                                    # Start dev server (http://localhost
 pnpm build                                  # Production build
 pnpm start                                  # Run production build
 pnpm lint                                   # Run ESLint
-npx playwright test e2e/sprint6.spec.ts     # Run E2E tests (39 tests, ~3 min)
+npx playwright test e2e/sprint6.spec.ts     # Run E2E tests (51 tests, ~4 min)
 npx playwright test e2e/sprint6.spec.ts -g "8. Admin"  # Run specific section
+npx playwright test e2e/sprint6.spec.ts -g "11\.|12\." # Run new feature tests only
 ```
 
 ### Claude Code Slash Commands
@@ -318,15 +350,15 @@ npx playwright test e2e/sprint6.spec.ts -g "8. Admin"  # Run specific section
 ## E2E Testing
 
 ### Overview
-39 Playwright E2E tests covering all Sprint 6 features. Tests run serially against the dev server using 4 temporary test accounts created via Supabase Admin API.
+51 Playwright E2E tests covering all Sprint 6 features plus admin facility creation and change password. Tests run serially against the dev server using 4 temporary test accounts created via Supabase Admin API (plus 1 dynamically created by the admin create facility test).
 
 ### Architecture
 ```
 e2e/
-  helpers.ts          # supabaseAdmin, createTestUser(), login(), ACCOUNTS, TEST_CITY
+  helpers.ts          # supabaseAdmin, createTestUser(), login(), ACCOUNTS, TEST_CITY, ADMIN_CREATED_FACILITY_EMAIL
   global-setup.ts     # Creates 4 accounts before all tests
-  global-teardown.ts  # Deletes accounts after all tests
-  sprint6.spec.ts     # 39 tests in 10 serial sections
+  global-teardown.ts  # Deletes accounts after all tests (including admin-created facility)
+  sprint6.spec.ts     # 51 tests in 12 serial sections
 playwright.config.ts  # Single worker, 60s timeout, auto-starts dev server
 ```
 
@@ -337,8 +369,9 @@ playwright.config.ts  # Single worker, 60s timeout, auto-starts dev server
 | facility | e2e-facility@test.com | E2E Facility |
 | agency | e2e-agency@test.com | E2E Company |
 | admin | e2e-admin@test.com | E2E Admin |
+| facility (dynamic) | e2e-created-facility@test.com | Created by admin test, cleaned up in teardown |
 
-### Test Sections (39 tests)
+### Test Sections (51 tests)
 1. **Auth & Login** (5) — Login all roles + unauthenticated redirect
 2. **Driver Onboarding** (2) — Wizard + dashboard
 3. **Facility Onboarding** (1) — Wizard
@@ -348,7 +381,9 @@ playwright.config.ts  # Single worker, 60s timeout, auto-starts dev server
 7. **Company Portal Pages** (5) — Compliance, CSV, reports, drivers, sidebar
 8. **Admin Panel** (8) — Dashboard, facilities, toggle, filters, transactions, analytics, nav
 9. **Company Driver Management** (5) — Re-associate, accept, stats, compliance, remove
-10. **Driver Profile** (1) — All sections visible
+10. **Driver Profile** (1) — All sections visible (includes Change Password)
+11. **Admin Create Facility** (6) — Create button, form loads, generate password, create account, appears in list, new owner can login
+12. **Change Password** (6) — Form visible (driver + facility), wrong password error, mismatch error, successful change, login with new password
 
 ### Prerequisites
 - `.env.local` with all Supabase credentials including `SUPABASE_SERVICE_ROLE_KEY`
@@ -356,7 +391,7 @@ playwright.config.ts  # Single worker, 60s timeout, auto-starts dev server
 - Port 3000 free (Playwright auto-starts dev server) or dev server running
 
 ### Troubleshooting
-- **Stale accounts**: Delete e2e-* users in Supabase Auth dashboard if globalTeardown didn't run
+- **Stale accounts**: Delete e2e-* users (including e2e-created-facility@test.com) in Supabase Auth dashboard if globalTeardown didn't run
 - **Strict mode violations**: Use specific selectors (`p:has-text(...)`, `h2:has-text(...)`) instead of `text=...`
 - **SSR timing**: Add `{ timeout: 15000 }` to `toHaveText` assertions on server-rendered pages
 - **RLS errors**: Never create cross-table policies between drivers↔agencies — use profiles for role checks

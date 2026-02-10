@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/input";
@@ -36,9 +37,14 @@ export function FacilitiesClient({ facilities }: FacilitiesClientProps) {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-gray-900">
-        Cleaning Facilities
-      </h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold text-gray-900">
+          Cleaning Facilities
+        </h1>
+        <Link href="/admin/facilities/create">
+          <Button size="sm">Create Facility</Button>
+        </Link>
+      </div>
 
       {/* Filters */}
       <div className="flex gap-3">

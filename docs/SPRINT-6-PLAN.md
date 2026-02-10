@@ -1,7 +1,7 @@
 # Sprint 6: Company & Admin Dashboards
 
 > **Created:** February 2026
-> **Status:** Planning
+> **Status:** Complete (Parts A-C), Deferred (Part D: Google Maps → Sprint 7)
 > **Depends on:** Sprints 1-5 (all complete)
 > **Scope:** Company portal, driver-company association, admin panel, Google Maps integration
 

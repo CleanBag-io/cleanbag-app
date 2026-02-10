@@ -88,6 +88,9 @@ export async function createTestUser(
   return data.user.id;
 }
 
+// Email used by admin "Create Facility" E2E test (cleaned up in globalTeardown)
+export const ADMIN_CREATED_FACILITY_EMAIL = "e2e-created-facility@test.com";
+
 // ─── Page helpers ──────────────────────────────────────────────
 
 export async function login(page: Page, email: string, password: string) {

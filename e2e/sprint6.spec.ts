@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { ACCOUNTS, TEST_PASSWORD, TEST_CITY, login } from "./helpers";
+import { ACCOUNTS, TEST_PASSWORD, TEST_CITY, login, ADMIN_CREATED_FACILITY_EMAIL } from "./helpers";
 
 // Account lifecycle is handled by globalSetup / globalTeardown
 // (see playwright.config.ts)
@@ -650,6 +650,200 @@ test.describe("10. Driver Profile", () => {
     await expect(page.locator("text=Personal Information")).toBeVisible();
     await expect(page.locator("text=Driver Information")).toBeVisible();
     await expect(page.locator("h3:has-text('Company')")).toBeVisible();
+    await expect(page.locator("text=Change Password")).toBeVisible();
     await expect(page.locator("text=Account")).toBeVisible();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────
+// SECTION 11: Admin Create Facility
+// ────────────────────────────────────────────────────────────────
+
+const CREATED_FACILITY_PASSWORD = "TempPass123";
+
+test.describe.serial("11. Admin Create Facility", () => {
+  test("11a. Facilities page shows Create Facility button", async ({ page }) => {
+    await login(page, ACCOUNTS.admin.email, TEST_PASSWORD);
+    await page.goto("/admin/facilities");
+    await page.waitForLoadState("networkidle");
+
+    await expect(
+      page.locator("a:has-text('Create Facility')")
+    ).toBeVisible({ timeout: 10000 });
+  });
+
+  test("11b. Create Facility page loads", async ({ page }) => {
+    await login(page, ACCOUNTS.admin.email, TEST_PASSWORD);
+    await page.goto("/admin/facilities/create");
+    await page.waitForLoadState("networkidle");
+
+    await expect(page.locator("main h1")).toHaveText("Create Cleaning Facility", { timeout: 15000 });
+    await expect(page.locator("label:has-text('Contact Name')")).toBeVisible();
+    await expect(page.locator("label:has-text('Email')")).toBeVisible();
+    await expect(page.locator("label:has-text('Temporary Password')")).toBeVisible();
+    await expect(page.locator("label:has-text('Cleaning Facility Name')")).toBeVisible();
+    await expect(page.locator("label:has-text('Address')")).toBeVisible();
+    await expect(page.locator("label:has-text('City')")).toBeVisible();
+  });
+
+  test("11c. Generate password button works", async ({ page }) => {
+    await login(page, ACCOUNTS.admin.email, TEST_PASSWORD);
+    await page.goto("/admin/facilities/create");
+    await page.waitForLoadState("networkidle");
+
+    const passwordInput = page.locator("input#password");
+    await expect(passwordInput).toHaveValue("");
+
+    await page.click("button:has-text('Generate')");
+    const value = await passwordInput.inputValue();
+    expect(value.length).toBe(10);
+  });
+
+  test("11d. Admin creates a new facility account", async ({ page }) => {
+    await login(page, ACCOUNTS.admin.email, TEST_PASSWORD);
+    await page.goto("/admin/facilities/create");
+    await page.waitForLoadState("networkidle");
+
+    await page.fill("input#contactName", "E2E Created Owner");
+    await page.fill("input#email", ADMIN_CREATED_FACILITY_EMAIL);
+    await page.fill("input#password", CREATED_FACILITY_PASSWORD);
+    await page.fill("input#facilityName", "E2E Created Facility");
+    await page.fill("input#address", "456 Test Avenue");
+    await page.selectOption("select#city", TEST_CITY);
+    await page.fill("input#phone", "+35799000000");
+
+    await page.click("button:has-text('Create Cleaning Facility')");
+
+    // Should show success with credentials
+    await expect(
+      page.locator("h2:has-text('Cleaning Facility Created')")
+    ).toBeVisible({ timeout: 15000 });
+    await expect(
+      page.locator(`text=${ADMIN_CREATED_FACILITY_EMAIL}`)
+    ).toBeVisible();
+    await expect(
+      page.locator(`text=${CREATED_FACILITY_PASSWORD}`)
+    ).toBeVisible();
+
+    // Buttons present
+    await expect(page.locator("button:has-text('Create Another')")).toBeVisible();
+    await expect(page.locator("a:has-text('Back to Facilities')")).toBeVisible();
+  });
+
+  test("11e. Newly created facility appears in facilities list", async ({ page }) => {
+    await login(page, ACCOUNTS.admin.email, TEST_PASSWORD);
+    await page.goto("/admin/facilities");
+    await page.waitForLoadState("networkidle");
+
+    await expect(
+      page.locator("td:has-text('E2E Created Facility')")
+    ).toBeVisible({ timeout: 10000 });
+  });
+
+  test("11f. New facility owner can log in", async ({ page }) => {
+    await login(page, ADMIN_CREATED_FACILITY_EMAIL, CREATED_FACILITY_PASSWORD);
+    await expect(page).toHaveURL(/\/facility/);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────
+// SECTION 12: Change Password
+// ────────────────────────────────────────────────────────────────
+
+const NEW_PASSWORD = "newpass456";
+
+test.describe.serial("12. Change Password", () => {
+  test("12a. Driver profile shows Change Password section", async ({ page }) => {
+    await login(page, ACCOUNTS.driver.email, TEST_PASSWORD);
+    await page.goto("/driver/profile");
+    await page.waitForLoadState("networkidle");
+
+    await expect(page.locator("h3:has-text('Change Password')")).toBeVisible({ timeout: 10000 });
+    await expect(page.locator("input#currentPassword")).toBeVisible();
+    await expect(page.locator("input#newPassword")).toBeVisible();
+    await expect(page.locator("input#confirmPassword")).toBeVisible();
+  });
+
+  test("12b. Facility settings shows Change Password section", async ({ page }) => {
+    await login(page, ACCOUNTS.facility.email, TEST_PASSWORD);
+    await page.goto("/facility/settings");
+    await page.waitForLoadState("networkidle");
+
+    // If facility hasn't completed onboarding yet, do it now
+    if (page.url().includes("/onboarding")) {
+      await page.fill("input#name", "E2E Facility for ChangePass");
+      await page.click("button:has-text('Continue')");
+      await page.fill("input#address", "789 Password St");
+      await page.selectOption("select#city", TEST_CITY);
+      await page.click("button:has-text('Complete Setup')");
+      await page.waitForURL(/\/facility\/dashboard/, { timeout: 15000 });
+      await page.goto("/facility/settings");
+      await page.waitForLoadState("networkidle");
+    }
+
+    await expect(page.locator("h2:has-text('Change Password')")).toBeVisible({ timeout: 10000 });
+    await expect(page.locator("input#currentPassword")).toBeVisible();
+  });
+
+  test("12c. Change password rejects wrong current password", async ({ page }) => {
+    await login(page, ACCOUNTS.driver.email, TEST_PASSWORD);
+    await page.goto("/driver/profile");
+    await page.waitForLoadState("networkidle");
+
+    await page.fill("input#currentPassword", "wrongpassword");
+    await page.fill("input#newPassword", NEW_PASSWORD);
+    await page.fill("input#confirmPassword", NEW_PASSWORD);
+    await page.click("button:has-text('Change Password')");
+
+    await expect(
+      page.locator("text=Current password is incorrect")
+    ).toBeVisible({ timeout: 10000 });
+  });
+
+  test("12d. Change password rejects mismatched new passwords", async ({ page }) => {
+    await login(page, ACCOUNTS.driver.email, TEST_PASSWORD);
+    await page.goto("/driver/profile");
+    await page.waitForLoadState("networkidle");
+
+    await page.fill("input#currentPassword", TEST_PASSWORD);
+    await page.fill("input#newPassword", NEW_PASSWORD);
+    await page.fill("input#confirmPassword", "doesnotmatch");
+    await page.click("button:has-text('Change Password')");
+
+    await expect(
+      page.locator("text=New passwords do not match")
+    ).toBeVisible({ timeout: 10000 });
+  });
+
+  test("12e. Facility can change password successfully", async ({ page }) => {
+    await login(page, ACCOUNTS.facility.email, TEST_PASSWORD);
+    await page.goto("/facility/settings");
+    await page.waitForLoadState("networkidle");
+
+    // If facility hasn't completed onboarding yet, do it now
+    if (page.url().includes("/onboarding")) {
+      await page.fill("input#name", "E2E Facility for ChangePass");
+      await page.click("button:has-text('Continue')");
+      await page.fill("input#address", "789 Password St");
+      await page.selectOption("select#city", TEST_CITY);
+      await page.click("button:has-text('Complete Setup')");
+      await page.waitForURL(/\/facility\/dashboard/, { timeout: 15000 });
+      await page.goto("/facility/settings");
+      await page.waitForLoadState("networkidle");
+    }
+
+    await page.fill("input#currentPassword", TEST_PASSWORD);
+    await page.fill("input#newPassword", NEW_PASSWORD);
+    await page.fill("input#confirmPassword", NEW_PASSWORD);
+    await page.click("button:has-text('Change Password')");
+
+    await expect(
+      page.locator("text=Password changed successfully")
+    ).toBeVisible({ timeout: 10000 });
+  });
+
+  test("12f. Facility can log in with new password", async ({ page }) => {
+    await login(page, ACCOUNTS.facility.email, NEW_PASSWORD);
+    await expect(page).toHaveURL(/\/facility/);
   });
 });

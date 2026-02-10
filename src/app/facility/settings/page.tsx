@@ -7,6 +7,7 @@ import { formatCurrency } from "@/lib/utils";
 import { PRICING } from "@/config/constants";
 import { StripeConnectSection } from "./stripe-connect";
 import { FacilityProfileForm } from "./profile-form";
+import { ChangePasswordForm } from "@/components/change-password-form";
 
 export default async function FacilitySettingsPage() {
   const profile = await getUser();
@@ -47,6 +48,14 @@ export default async function FacilitySettingsPage() {
             </p>
           </div>
         </div>
+      </Card>
+
+      {/* Change Password */}
+      <Card className="p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">
+          Change Password
+        </h2>
+        <ChangePasswordForm />
       </Card>
 
       {/* Facility Profile */}

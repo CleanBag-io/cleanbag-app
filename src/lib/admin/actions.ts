@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { COMMISSION_RATES } from "@/config/constants";
 import type { Facility, Transaction, Order } from "@/types";
 
 export type ActionResult<T = void> = {
@@ -275,4 +276,72 @@ export async function getAnalytics(
       totalOrders,
     },
   };
+}
+
+// Create a new facility account (auth user + profile + facility record)
+export async function createFacilityAccount(data: {
+  email: string;
+  password: string;
+  contactName: string;
+  facilityName: string;
+  address: string;
+  city: string;
+  phone?: string;
+}): Promise<ActionResult<{ email: string; tempPassword: string }>> {
+  const adminCheck = await verifyAdmin();
+  if (adminCheck.error) return { error: adminCheck.error };
+
+  const { email, password, contactName, facilityName, address, city, phone } = data;
+
+  if (!email || !password || !contactName || !facilityName || !address || !city) {
+    return { error: "All required fields must be provided" };
+  }
+
+  if (password.length < 6) {
+    return { error: "Password must be at least 6 characters" };
+  }
+
+  const sb = createServiceRoleClient();
+
+  // Create auth user with email pre-confirmed
+  const { data: authData, error: authError } = await sb.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: {
+      full_name: contactName,
+      role: "facility",
+    },
+  });
+
+  if (authError) {
+    return { error: authError.message };
+  }
+
+  const userId = authData.user.id;
+
+  // Insert facility record
+  const defaultServices = [{ type: "standard", price: 4.5, duration: 20 }];
+
+  const { error: facilityError } = await sb.from("facilities").insert({
+    user_id: userId,
+    name: facilityName,
+    address,
+    city,
+    phone: phone || null,
+    services: defaultServices,
+    commission_rate: COMMISSION_RATES.default,
+    is_active: true,
+    rating: 0,
+    total_orders: 0,
+  });
+
+  if (facilityError) {
+    // Clean up: delete the auth user if facility insert fails
+    await sb.auth.admin.deleteUser(userId);
+    return { error: facilityError.message };
+  }
+
+  revalidatePath("/admin/facilities", "page");
+  return { data: { email, tempPassword: password } };
 }

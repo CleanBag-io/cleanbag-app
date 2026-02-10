@@ -2,7 +2,7 @@ Update the E2E test suite to cover new or changed features.
 
 ## Context
 
-The E2E tests live in `e2e/sprint6.spec.ts` (51 tests across 12 sections). Before making changes, read the full test file and understand the test flow.
+The E2E tests live in `e2e/sprint6.spec.ts` (58 tests across 13 sections). Before making changes, read the full test file and understand the test flow.
 
 ## Steps
 
@@ -40,6 +40,7 @@ playwright.config.ts  # Single worker, 60s timeout, auto-starts dev server
 | 10 | Driver Profile | 1 | Full profile with all sections visible (including Change Password) |
 | 11 | Admin Create Facility | 6 | Create button visible, form loads, generate password, create account + credentials shown, appears in list, new owner can login |
 | 12 | Change Password | 6 | Form visible (driver + facility), wrong password error, mismatch error, successful change, login with new password |
+| 13 | Order Completion, Compliance & Rating | 7 | Seed order, verify overdue, facility completes, driver becomes compliant, driver rates, facility rating updated, cleanup |
 
 ## Key Patterns
 

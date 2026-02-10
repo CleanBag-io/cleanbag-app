@@ -9,6 +9,7 @@ import type { Role } from "@/config/constants";
 export interface NavItem {
   href: string;
   label: string;
+  mobileLabel?: string;
   icon: string;
 }
 

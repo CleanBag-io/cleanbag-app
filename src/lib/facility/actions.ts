@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe/client";
 import type { Facility, Order, Driver, Profile } from "@/types";
 import type { OrderStatus } from "@/config/constants";
@@ -322,10 +322,10 @@ export async function completeOrder(orderId: string): Promise<ActionResult> {
     return { error: "Not authenticated" };
   }
 
-  // Get facility ID
+  // Get facility
   const { data: facility } = await supabase
     .from("facilities")
-    .select("id")
+    .select("id, total_orders, stripe_account_id")
     .eq("user_id", user.id)
     .single();
 
@@ -364,26 +364,19 @@ export async function completeOrder(orderId: string): Promise<ActionResult> {
     return { error: orderError.message };
   }
 
-  // Get full facility record for Stripe transfer
-  const { data: fullFacility } = await supabase
-    .from("facilities")
-    .select("stripe_account_id")
-    .eq("id", facility.id)
-    .single();
-
   // Calculate payout (base_price - commission)
   const payoutAmount = Math.round((order.base_price - order.commission_amount) * 100); // cents
 
   // Create Stripe transfer if facility has connected account and order was paid
   let stripeTransferId: string | null = null;
-  const txStatus = fullFacility?.stripe_account_id && order.stripe_payment_intent_id ? "completed" : "pending";
+  const txStatus = facility.stripe_account_id && order.stripe_payment_intent_id ? "completed" : "pending";
 
-  if (fullFacility?.stripe_account_id && order.stripe_payment_intent_id && stripe) {
+  if (facility.stripe_account_id && order.stripe_payment_intent_id && stripe) {
     try {
       const transfer = await stripe.transfers.create({
         amount: payoutAmount,
         currency: "eur",
-        destination: fullFacility.stripe_account_id,
+        destination: facility.stripe_account_id,
         transfer_group: orderId,
       });
       stripeTransferId = transfer.id;
@@ -420,27 +413,29 @@ export async function completeOrder(orderId: string): Promise<ActionResult> {
   ]);
 
   // Update driver's last cleaning date and total cleanings
-  const { error: driverError } = await supabase.rpc("increment_driver_cleanings", {
-    p_driver_id: order.driver_id,
-    p_cleaning_date: now,
-  });
+  // Uses service role to bypass RLS (facility user can't update drivers table directly)
+  // compliance_status is auto-computed by the check_driver_compliance trigger
+  const serviceClient = createServiceRoleClient();
 
-  // If RPC doesn't exist, do manual update
-  if (driverError) {
-    await supabase
-      .from("drivers")
-      .update({
-        last_cleaning_date: now,
-        total_cleanings: supabase.rpc("increment", { x: 1 }),
-      })
-      .eq("id", order.driver_id);
-  }
+  const { data: driver } = await serviceClient
+    .from("drivers")
+    .select("total_cleanings")
+    .eq("id", order.driver_id)
+    .single();
+
+  await serviceClient
+    .from("drivers")
+    .update({
+      last_cleaning_date: now,
+      total_cleanings: (driver?.total_cleanings || 0) + 1,
+    })
+    .eq("id", order.driver_id);
 
   // Update facility total orders
   await supabase
     .from("facilities")
     .update({
-      total_orders: facility.id, // This will be incremented by trigger
+      total_orders: (facility.total_orders || 0) + 1,
     })
     .eq("id", facility.id);
 

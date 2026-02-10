@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input, Label } from "@/components/ui/input";
+import { PasswordInput, Label } from "@/components/ui/input";
 import { changePassword } from "@/lib/auth/actions";
 
 export function ChangePasswordForm() {
@@ -41,9 +41,8 @@ export function ChangePasswordForm() {
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
         <Label htmlFor="currentPassword">Current Password</Label>
-        <Input
+        <PasswordInput
           id="currentPassword"
-          type="password"
           value={currentPassword}
           onChange={(e) => setCurrentPassword(e.target.value)}
           required
@@ -51,9 +50,8 @@ export function ChangePasswordForm() {
       </div>
       <div>
         <Label htmlFor="newPassword">New Password</Label>
-        <Input
+        <PasswordInput
           id="newPassword"
-          type="password"
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
           required
@@ -62,9 +60,8 @@ export function ChangePasswordForm() {
       </div>
       <div>
         <Label htmlFor="confirmPassword">Confirm New Password</Label>
-        <Input
+        <PasswordInput
           id="confirmPassword"
-          type="password"
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
           required

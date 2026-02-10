@@ -90,7 +90,7 @@ export function MobileNav({ navItems }: MobileNavProps) {
             )}
           >
             {iconMap[item.icon] || iconMap.home}
-            <span className="truncate">{item.label}</span>
+            <span className="truncate">{item.mobileLabel || item.label}</span>
           </Link>
         );
       })}

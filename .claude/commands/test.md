@@ -21,7 +21,7 @@ Run the full E2E test suite.
 - Never modify test expectations to make failing tests pass without understanding the root cause
 - To run specific sections: `npx playwright test e2e/sprint6.spec.ts -g "11. Admin"` or `npx playwright test e2e/sprint6.spec.ts -g "11\.|12\."`
 
-## Test Sections (51 tests)
+## Test Sections (58 tests)
 
 | # | Section | Tests |
 |---|---------|-------|
@@ -37,3 +37,4 @@ Run the full E2E test suite.
 | 10 | Driver Profile | 1 |
 | 11 | Admin Create Facility | 6 |
 | 12 | Change Password | 6 |
+| 13 | Order Completion, Compliance & Rating | 7 |

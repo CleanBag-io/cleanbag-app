@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { register } from "@/lib/auth/actions";
 import { Button } from "@/components/ui/button";
-import { Input, Label, Select, InputError } from "@/components/ui/input";
+import { Input, PasswordInput, Label, Select, InputError } from "@/components/ui/input";
 
 export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
@@ -100,8 +100,7 @@ export default function RegisterPage() {
           <Label htmlFor="password" required>
             Password
           </Label>
-          <Input
-            type="password"
+          <PasswordInput
             id="password"
             name="password"
             autoComplete="new-password"

@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { ACCOUNTS, TEST_PASSWORD, TEST_CITY, login, ADMIN_CREATED_FACILITY_EMAIL } from "./helpers";
+import { ACCOUNTS, TEST_PASSWORD, TEST_CITY, login, ADMIN_CREATED_FACILITY_EMAIL, supabaseAdmin } from "./helpers";
 
 // Account lifecycle is handled by globalSetup / globalTeardown
 // (see playwright.config.ts)
@@ -845,5 +845,281 @@ test.describe.serial("12. Change Password", () => {
   test("12f. Facility can log in with new password", async ({ page }) => {
     await login(page, ACCOUNTS.facility.email, NEW_PASSWORD);
     await expect(page).toHaveURL(/\/facility/);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────
+// SECTION 13: Order Completion, Compliance & Rating
+// Tests the fixes for:
+//   - completeOrder updating driver.last_cleaning_date / total_cleanings
+//   - compliance trigger auto-setting compliance_status to "compliant"
+//   - rateOrder updating facility.rating aggregate
+//   - DB trigger recalculate_facility_rating
+// ────────────────────────────────────────────────────────────────
+
+// Shared state for section 13
+let testOrderId: string;
+
+// Helper: ensure driver onboarding is done, return to target page
+async function ensureDriverOnboarded(page: import("@playwright/test").Page) {
+  if (page.url().includes("/onboarding")) {
+    await page.click("text=Motorcycle");
+    await page.click("button:has-text('Continue')");
+    await page.click("text=Wolt");
+    await page.click("button:has-text('Continue')");
+    await page.selectOption("select#city", TEST_CITY);
+    await page.click("button:has-text('Complete Setup')");
+    await page.waitForURL(/\/driver\/dashboard/, { timeout: 15000 });
+  }
+}
+
+// Helper: ensure facility onboarding is done
+async function ensureFacilityOnboarded(page: import("@playwright/test").Page) {
+  if (page.url().includes("/onboarding")) {
+    await page.fill("input#name", "E2E Test Facility");
+    await page.click("button:has-text('Continue')");
+    await page.fill("input#address", "123 Test Street");
+    await page.selectOption("select#city", TEST_CITY);
+    await page.click("button:has-text('Complete Setup')");
+    await page.waitForURL(/\/facility\/dashboard/, { timeout: 15000 });
+  }
+}
+
+// Helper: seed the test order (call after both driver + facility records exist)
+async function seedTestOrder() {
+  // Look up by the known test account emails to avoid picking stale records
+  const { data: driverProfile } = await supabaseAdmin
+    .from("profiles")
+    .select("id")
+    .eq("role", "driver")
+    .ilike("full_name", "%E2E%")
+    .limit(1)
+    .single();
+  const { data: facilityProfile } = await supabaseAdmin
+    .from("profiles")
+    .select("id")
+    .eq("role", "facility")
+    .ilike("full_name", "%E2E%")
+    .limit(1)
+    .single();
+
+  if (!driverProfile || !facilityProfile) throw new Error("Test profiles missing");
+
+  const { data: driver } = await supabaseAdmin
+    .from("drivers")
+    .select("id")
+    .eq("user_id", driverProfile.id)
+    .single();
+  const { data: facility } = await supabaseAdmin
+    .from("facilities")
+    .select("id")
+    .eq("user_id", facilityProfile.id)
+    .single();
+
+  if (!driver || !facility) throw new Error("Driver or facility record missing");
+
+  // Reset driver compliance to a known state
+  await supabaseAdmin
+    .from("drivers")
+    .update({ last_cleaning_date: null, compliance_status: "overdue", total_cleanings: 0 })
+    .eq("id", driver.id);
+
+  // Reset facility rating
+  await supabaseAdmin
+    .from("facilities")
+    .update({ rating: 0 })
+    .eq("id", facility.id);
+
+  // Insert an in_progress order (simulating a paid order mid-cleaning)
+  const { data: order, error } = await supabaseAdmin
+    .from("orders")
+    .insert({
+      driver_id: driver.id,
+      facility_id: facility.id,
+      service_type: "standard",
+      status: "in_progress",
+      payment_status: "paid",
+      base_price: 4.5,
+      total_price: 4.5,
+      commission_amount: 2.12,
+      accepted_at: new Date().toISOString(),
+      started_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+
+  if (error) throw new Error(`Failed to seed order: ${error.message}`);
+  return order!.id;
+}
+
+test.describe.serial("13. Order Completion, Compliance & Rating", () => {
+  test("13a. Ensure driver onboarded + verify Overdue", async ({ page }) => {
+    await login(page, ACCOUNTS.driver.email, TEST_PASSWORD);
+    await page.goto("/driver/dashboard");
+    await page.waitForLoadState("networkidle");
+    await ensureDriverOnboarded(page);
+
+    // Seed order after onboarding ensures the driver record exists.
+    // But facility may not exist yet — we handle that: seed happens in 13b after facility onboarding.
+    // For now just verify the overdue state.
+    await page.goto("/driver/dashboard");
+    await page.waitForLoadState("networkidle");
+
+    await expect(page.locator("p:has-text('Overdue')").first()).toBeVisible({ timeout: 15000 });
+    await expect(page.locator("text=Last cleaned: Never")).toBeVisible();
+  });
+
+  test("13b. Ensure facility onboarded + seed test order", async ({ page }) => {
+    // Try both passwords (section 12 may have changed it)
+    try {
+      await login(page, ACCOUNTS.facility.email, NEW_PASSWORD);
+    } catch {
+      await login(page, ACCOUNTS.facility.email, TEST_PASSWORD);
+    }
+    await page.goto("/facility/dashboard");
+    await page.waitForLoadState("networkidle");
+    await ensureFacilityOnboarded(page);
+
+    // Both driver + facility records now exist — seed the order
+    testOrderId = await seedTestOrder();
+    expect(testOrderId).toBeTruthy();
+  });
+
+  test("13c. Facility completes the order", async ({ page }) => {
+    try {
+      await login(page, ACCOUNTS.facility.email, NEW_PASSWORD);
+    } catch {
+      await login(page, ACCOUNTS.facility.email, TEST_PASSWORD);
+    }
+    await page.goto("/facility/orders");
+    await page.waitForLoadState("networkidle");
+
+    // Should see an in-progress order with "Mark Complete" button
+    const completeBtn = page.locator("button:has-text('Mark Complete')").first();
+    await expect(completeBtn).toBeVisible({ timeout: 15000 });
+    await completeBtn.click();
+
+    // Wait for the action to process
+    await page.waitForTimeout(2000);
+    await page.reload();
+    await page.waitForLoadState("networkidle");
+
+    // The order should now appear under Completed
+    await expect(page.locator("h2:has-text('Completed')")).toBeVisible({ timeout: 15000 });
+  });
+
+  test("13d. Driver dashboard shows Compliant after completion", async ({ page }) => {
+    await login(page, ACCOUNTS.driver.email, TEST_PASSWORD);
+    await page.goto("/driver/dashboard");
+    await page.waitForLoadState("networkidle");
+
+    // Compliance card should now show "Compliant"
+    await expect(page.locator("p.text-3xl:has-text('Compliant')")).toBeVisible({ timeout: 15000 });
+    // Last cleaned should no longer say "Never"
+    await expect(page.locator("text=Last cleaned: Never")).not.toBeVisible();
+    // Total cleanings should be 1
+    await expect(page.locator("p.text-4xl:has-text('1')")).toBeVisible();
+  });
+
+  test("13e. Driver rates the completed order", async ({ page }) => {
+    await login(page, ACCOUNTS.driver.email, TEST_PASSWORD);
+    await page.goto("/driver/orders");
+    await page.waitForLoadState("networkidle");
+
+    // Click through to the order detail
+    const orderLink = page.locator("a[href*='/driver/orders/']").first();
+    await expect(orderLink).toBeVisible({ timeout: 15000 });
+    await orderLink.click();
+    await page.waitForLoadState("networkidle");
+
+    // Should see the rating prompt "How was your experience?"
+    await expect(page.locator("h2:has-text('How was your experience')")).toBeVisible({ timeout: 15000 });
+
+    // Click the 5th star (5-star rating)
+    const stars = page.locator("button:has-text('☆'), button:has-text('⭐')");
+    await stars.nth(4).click();
+
+    // Fill in a review
+    await page.fill("textarea", "Excellent cleaning service!");
+
+    // Submit
+    await page.click("button:has-text('Submit Rating')");
+
+    // Wait for the page to refresh and show "Your Rating"
+    await page.waitForTimeout(2000);
+    await page.reload();
+    await page.waitForLoadState("networkidle");
+
+    await expect(page.locator("h2:has-text('Your Rating')")).toBeVisible({ timeout: 15000 });
+    await expect(page.locator("text=5/5")).toBeVisible();
+  });
+
+  test("13f. Facility rating is updated (no longer 0.0)", async ({ page }) => {
+    await login(page, ACCOUNTS.driver.email, TEST_PASSWORD);
+    await page.goto("/driver/dashboard");
+    await page.waitForLoadState("networkidle");
+
+    // The nearby facilities section should show a rating > 0
+    // Facility cards show rating like "5.0" next to a star
+    const ratingText = page.locator("span.text-sm.font-medium:has-text('5.0')");
+    await expect(ratingText.first()).toBeVisible({ timeout: 15000 });
+  });
+
+  test("13g. Cleanup: remove test order and reset state", async () => {
+    // Clean up test order
+    if (testOrderId) {
+      await supabaseAdmin.from("transactions").delete().eq("order_id", testOrderId);
+      await supabaseAdmin.from("orders").delete().eq("id", testOrderId);
+    }
+
+    // Look up test accounts by profile
+    const { data: facilityProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("role", "facility")
+      .ilike("full_name", "%E2E%")
+      .limit(1)
+      .single();
+
+    const { data: driverProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("role", "driver")
+      .ilike("full_name", "%E2E%")
+      .limit(1)
+      .single();
+
+    // Reset facility rating
+    if (facilityProfile) {
+      const { data: facility } = await supabaseAdmin
+        .from("facilities")
+        .select("id")
+        .eq("user_id", facilityProfile.id)
+        .single();
+
+      if (facility) {
+        const { data: rated } = await supabaseAdmin
+          .from("orders")
+          .select("rating")
+          .eq("facility_id", facility.id)
+          .not("rating", "is", null);
+
+        const avg = rated && rated.length > 0
+          ? Math.round((rated.reduce((s, o) => s + o.rating, 0) / rated.length) * 10) / 10
+          : 0;
+
+        await supabaseAdmin.from("facilities").update({ rating: avg }).eq("id", facility.id);
+      }
+    }
+
+    // Reset driver compliance
+    if (driverProfile) {
+      await supabaseAdmin
+        .from("drivers")
+        .update({ last_cleaning_date: null, compliance_status: "overdue", total_cleanings: 0 })
+        .eq("user_id", driverProfile.id);
+    }
+
+    expect(true).toBe(true);
   });
 });

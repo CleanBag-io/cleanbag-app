@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useState, useTransition } from "react";
 import { login } from "@/lib/auth/actions";
 import { Button } from "@/components/ui/button";
-import { Input, Label, InputError } from "@/components/ui/input";
+import { Input, PasswordInput, Label, InputError } from "@/components/ui/input";
 
 function LoginForm() {
   const searchParams = useSearchParams();
@@ -62,8 +62,7 @@ function LoginForm() {
           <Label htmlFor="password" required>
             Password
           </Label>
-          <Input
-            type="password"
+          <PasswordInput
             id="password"
             name="password"
             autoComplete="current-password"

@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe/client";
 import { createRefund } from "@/lib/stripe/actions";
 import type { Driver, Order, Facility, Agency, AgencyRequest } from "@/types";
@@ -403,6 +403,17 @@ export async function rateOrder(
     return { error: "Rating must be between 1 and 5" };
   }
 
+  // Get the order to find the facility
+  const { data: order } = await supabase
+    .from("orders")
+    .select("facility_id")
+    .eq("id", orderId)
+    .single();
+
+  if (!order) {
+    return { error: "Order not found" };
+  }
+
   const { error } = await supabase
     .from("orders")
     .update({
@@ -415,7 +426,24 @@ export async function rateOrder(
     return { error: error.message };
   }
 
+  // Recalculate facility aggregate rating (service role to bypass RLS)
+  const serviceClient = createServiceRoleClient();
+  const { data: avgResult } = await serviceClient
+    .from("orders")
+    .select("rating")
+    .eq("facility_id", order.facility_id)
+    .not("rating", "is", null);
+
+  if (avgResult && avgResult.length > 0) {
+    const avg = avgResult.reduce((sum, o) => sum + o.rating, 0) / avgResult.length;
+    await serviceClient
+      .from("facilities")
+      .update({ rating: Math.round(avg * 10) / 10 })
+      .eq("id", order.facility_id);
+  }
+
   revalidatePath("/driver/orders", "page");
+  revalidatePath("/driver/facilities", "layout");
   return {};
 }
 

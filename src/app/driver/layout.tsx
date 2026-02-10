@@ -5,7 +5,7 @@ import { getUser } from "@/lib/auth/actions";
 
 const driverNavItems = [
   { href: "/driver/dashboard", label: "Dashboard", icon: "home" },
-  { href: "/driver/facilities", label: "Find Cleaning Facility", icon: "search" },
+  { href: "/driver/facilities", label: "Find Cleaning Facility", mobileLabel: "Find", icon: "search" },
   { href: "/driver/orders", label: "My Orders", icon: "clipboard" },
   { href: "/driver/history", label: "History", icon: "clock" },
   { href: "/driver/profile", label: "Profile", icon: "user" },

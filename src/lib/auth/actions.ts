@@ -139,7 +139,9 @@ export async function getUser() {
     .eq("id", user.id)
     .single();
 
-  return profile;
+  if (!profile) return null;
+
+  return { ...profile, email: user.email };
 }
 
 export async function changePassword(data: {

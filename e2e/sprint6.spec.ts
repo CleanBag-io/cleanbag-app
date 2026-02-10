@@ -650,7 +650,7 @@ test.describe("10. Driver Profile", () => {
     await expect(page.locator("text=Personal Information")).toBeVisible();
     await expect(page.locator("text=Driver Information")).toBeVisible();
     await expect(page.locator("h3:has-text('Company')")).toBeVisible();
-    await expect(page.locator("text=Change Password")).toBeVisible();
+    await expect(page.locator("h3:has-text('Change Password')")).toBeVisible();
     await expect(page.locator("text=Account")).toBeVisible();
   });
 });

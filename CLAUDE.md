@@ -377,6 +377,7 @@ Brand colors available as Tailwind classes:
 
 ### Future Sprints
 - Sprint 7: Notifications (push + in-app), PWA, facility dashboard auto-refresh, polish
+- Future: User geolocation & distance sorting — browser Geolocation API for driver location on map, Haversine-based distance sort for facility list (see `docs/NICE-TO-HAVE.md`)
 
 ## Reference Files
 - Prototype (for UI patterns): `../cleanbag-prototype/`

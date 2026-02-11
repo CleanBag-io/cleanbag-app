@@ -145,12 +145,21 @@
 
 ## Platform-Wide
 
-### Google Maps Integration
-- Real map on `/driver/facilities` with markers for each facility
-- Map on facility detail page showing exact location
-- Address autocomplete during facility onboarding (Google Places API)
-- Lat/lng capture for existing facilities
-- **Why deferred:** Planned for Sprint 7. Facility list with city filter works for now.
+### Google Maps Integration ✅ COMPLETE (Sprint 7)
+- ~~Real map on `/driver/facilities` with markers for each facility~~
+- ~~Map on facility detail page showing exact location~~
+- ~~Lat/lng geocoding for new and existing facilities~~
+- Address autocomplete during facility onboarding (Google Places API) — still deferred
+- **Status:** Basic maps shipped in Sprint 7. See "User Geolocation & Distance Sorting" below for next phase.
+
+### User Geolocation & Distance Sorting
+- **Show driver's location on map** — blue dot marker using browser Geolocation API (`navigator.geolocation.getCurrentPosition()`)
+- **Center map on driver's location** — instead of default Cyprus center, dynamically center on driver's position (fallback to `MAP_CONFIG.defaultCenter` if denied/unavailable)
+- **Sort facility list by distance** — calculate distance via Haversine formula (no API calls needed), show "2.3 km away" on facility cards, sort nearest-first instead of by rating (fallback to rating sort if location unavailable)
+- Requires a client wrapper around the server-rendered `/driver/facilities` page for the async geolocation prompt
+- City filter chips still work — distance sorting applies within filtered results
+- Facilities with `null` lat/lng excluded from distance calculation
+- **Why deferred:** Google Maps basic integration was the Sprint 7 priority. Geolocation is a natural next phase once notifications and PWA are done.
 
 ### Multi-Language Support (i18n)
 - Greek translation for all user-facing text
@@ -223,7 +232,8 @@ Based on impact and alignment with Sprint 7 goals (Notifications, PWA, polish):
 
 | Priority | Feature | Effort |
 |----------|---------|--------|
-| High | Google Maps integration | Medium |
+| High | ~~Google Maps integration~~ ✅ | — |
+| High | User geolocation & distance sorting | Medium |
 | High | Push notifications (PWA) | High |
 | High | Company settings page + change password | Low |
 | Medium | Force password change on first login | Low |

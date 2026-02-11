@@ -85,7 +85,9 @@ supabase/
 ├── schema.sql              # Database schema (run first)
 ├── fix-profiles-rls.sql    # RLS fix (run after schema.sql)
 ├── migrations/
-│   └── 001-sprint5-pricing.sql  # Sprint 5: pricing + transactions policy
+│   ├── 001-sprint5-pricing.sql  # Sprint 5: pricing + transactions policy
+│   ├── 002-sprint6-agency-requests.sql  # Sprint 6: agency_requests table + RLS
+│   └── 003-facility-rating-trigger.sql  # Facility rating aggregation trigger
 ├── seed-test-data.sql      # Sample data for testing (edit UUIDs first)
 └── reset-data.sql          # Wipe ALL data including auth users
 ```
@@ -128,6 +130,8 @@ Run these SQL files in Supabase SQL Editor (in order):
 1. `supabase/schema.sql` - Creates all tables, indexes, RLS policies, and triggers
 2. `supabase/fix-profiles-rls.sql` - Fixes admin RLS policy recursion issue
 3. `supabase/migrations/001-sprint5-pricing.sql` - Sprint 5: pricing simplification + transactions INSERT policy
+4. `supabase/migrations/002-sprint6-agency-requests.sql` - Sprint 6: agency_requests table + cross-table RLS (uses profiles for role checks)
+5. `supabase/migrations/003-facility-rating-trigger.sql` - Auto-recalculates facility.rating on order rating changes
 
 **Tables**: profiles, drivers, facilities, agencies, orders, transactions, notifications
 
@@ -305,7 +309,7 @@ Brand colors available as Tailwind classes:
 - [x] "Authenticated users can read profiles" — cross-role name visibility
 
 **E2E Tests:**
-- [x] 51 Playwright tests covering all features (auth, onboarding, association, portal, admin, profile, create facility, change password)
+- [x] 58 Playwright tests covering all features (auth, onboarding, association, portal, admin, profile, create facility, change password, order completion, compliance, rating)
 - [ ] (Optional) Lat/lng capture in facility onboarding/settings
 
 ### Post-Sprint 6: Admin Create Facility & Change Password ✅ COMPLETE
@@ -324,8 +328,36 @@ Brand colors available as Tailwind classes:
 - [x] Added to driver profile page (before Account/Logout card)
 - [x] E2E tests: 6 tests in section 12
 
+### Post-Sprint 6: Bug Fixes & UI Polish ✅ COMPLETE
+
+**Order Completion / Driver Compliance Fix:**
+- [x] `completeOrder()` now correctly updates `drivers.last_cleaning_date` and `total_cleanings`
+- [x] Uses `createServiceRoleClient()` to bypass RLS (facility user can't write to drivers table)
+- [x] DB trigger `check_driver_compliance` auto-sets `compliance_status` to compliant/warning/overdue based on `last_cleaning_date`
+- [x] Fixed `facilities.total_orders` increment (was broken — set to facility.id instead of incrementing)
+- [x] Removed redundant second query for `stripe_account_id` in completeOrder
+
+**Rating Aggregation Fix:**
+- [x] `rateOrder()` now recalculates `facilities.rating` as `AVG(orders.rating)` after saving the order rating
+- [x] Uses service role client to bypass RLS for writing to facilities table
+- [x] New DB trigger `recalculate_facility_rating` (migration 003) as long-term safety net — fires on `INSERT OR UPDATE OF rating ON orders`
+
+**UI Polish:**
+- [x] `PasswordInput` component with eye toggle (show/hide password) added to all password fields (login, register, change password)
+- [x] Mobile bottom nav: "Find Cleaning Facility" shortened to "Find" via `mobileLabel` prop on `NavItem`
+
+**E2E Tests:**
+- [x] Section 13: Order Completion, Compliance & Rating (7 tests)
+- [x] Total: 58 tests across 13 sections, all passing
+
+### Known Issues for Sprint 7
+- **No auto-refresh**: Facility dashboard loads data once on page load (no polling/realtime). Sprint 7 notifications work will add Supabase Realtime subscriptions.
+- **Change Password missing**: Company and admin roles don't have settings pages yet — `ChangePasswordForm` needs to be added when those pages exist.
+- **Google Maps deferred**: `MAP_CONFIG` and lat/lng columns exist but map UI is still placeholder. Facility lat/lng values are null.
+- **No facility rating on DELETE**: The `recalculate_facility_rating` trigger only fires on INSERT/UPDATE, not DELETE. If an order with a rating is deleted, the facility aggregate won't auto-recalculate. The cleanup in E2E test 13g handles this manually.
+
 ### Future Sprints
-- Sprint 7: Notifications, PWA, polish, Google Maps
+- Sprint 7: Notifications (push + in-app), PWA, Google Maps, facility dashboard auto-refresh, polish
 
 ## Reference Files
 - Prototype (for UI patterns): `../cleanbag-prototype/`
@@ -338,7 +370,7 @@ pnpm dev                                    # Start dev server (http://localhost
 pnpm build                                  # Production build
 pnpm start                                  # Run production build
 pnpm lint                                   # Run ESLint
-npx playwright test e2e/sprint6.spec.ts     # Run E2E tests (51 tests, ~4 min)
+npx playwright test e2e/sprint6.spec.ts     # Run E2E tests (58 tests, ~5 min)
 npx playwright test e2e/sprint6.spec.ts -g "8. Admin"  # Run specific section
 npx playwright test e2e/sprint6.spec.ts -g "11\.|12\." # Run new feature tests only
 ```
@@ -350,7 +382,7 @@ npx playwright test e2e/sprint6.spec.ts -g "11\.|12\." # Run new feature tests o
 ## E2E Testing
 
 ### Overview
-51 Playwright E2E tests covering all Sprint 6 features plus admin facility creation and change password. Tests run serially against the dev server using 4 temporary test accounts created via Supabase Admin API (plus 1 dynamically created by the admin create facility test).
+58 Playwright E2E tests covering all Sprint 6 features plus admin facility creation, change password, and order completion/compliance/rating. Tests run serially against the dev server using 4 temporary test accounts created via Supabase Admin API (plus 1 dynamically created by the admin create facility test).
 
 ### Architecture
 ```
@@ -358,7 +390,7 @@ e2e/
   helpers.ts          # supabaseAdmin, createTestUser(), login(), ACCOUNTS, TEST_CITY, ADMIN_CREATED_FACILITY_EMAIL
   global-setup.ts     # Creates 4 accounts before all tests
   global-teardown.ts  # Deletes accounts after all tests (including admin-created facility)
-  sprint6.spec.ts     # 51 tests in 12 serial sections
+  sprint6.spec.ts     # 58 tests in 13 serial sections
 playwright.config.ts  # Single worker, 60s timeout, auto-starts dev server
 ```
 
@@ -371,7 +403,7 @@ playwright.config.ts  # Single worker, 60s timeout, auto-starts dev server
 | admin | e2e-admin@test.com | E2E Admin |
 | facility (dynamic) | e2e-created-facility@test.com | Created by admin test, cleaned up in teardown |
 
-### Test Sections (51 tests)
+### Test Sections (58 tests)
 1. **Auth & Login** (5) — Login all roles + unauthenticated redirect
 2. **Driver Onboarding** (2) — Wizard + dashboard
 3. **Facility Onboarding** (1) — Wizard
@@ -384,6 +416,7 @@ playwright.config.ts  # Single worker, 60s timeout, auto-starts dev server
 10. **Driver Profile** (1) — All sections visible (includes Change Password)
 11. **Admin Create Facility** (6) — Create button, form loads, generate password, create account, appears in list, new owner can login
 12. **Change Password** (6) — Form visible (driver + facility), wrong password error, mismatch error, successful change, login with new password
+13. **Order Completion, Compliance & Rating** (7) — Verify overdue, seed order, facility completes, driver compliant, driver rates, facility rating updated, cleanup
 
 ### Prerequisites
 - `.env.local` with all Supabase credentials including `SUPABASE_SERVICE_ROLE_KEY`

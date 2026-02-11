@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe/client";
+import { geocodeAddress } from "@/lib/google-maps/geocode";
 import type { Facility, Order, Driver, Profile } from "@/types";
 import type { OrderStatus } from "@/config/constants";
 import { COMMISSION_RATES } from "@/config/constants";
@@ -49,6 +50,9 @@ export async function createFacility(formData: FormData): Promise<ActionResult> 
     { type: "standard", price: 4.5, duration: 20 },
   ];
 
+  // Geocode address to lat/lng
+  const coords = await geocodeAddress(address, city);
+
   const { error } = await supabase.from("facilities").insert({
     user_id: user.id,
     name,
@@ -60,6 +64,8 @@ export async function createFacility(formData: FormData): Promise<ActionResult> 
     is_active: true,
     rating: 0,
     total_orders: 0,
+    latitude: coords?.lat ?? null,
+    longitude: coords?.lng ?? null,
   });
 
   if (error) {
@@ -554,13 +560,32 @@ export async function updateFacility(formData: FormData): Promise<ActionResult> 
     return { error: "Name and address are required" };
   }
 
+  // Fetch current facility to get city for geocoding
+  const { data: current } = await supabase
+    .from("facilities")
+    .select("city, address")
+    .eq("user_id", user.id)
+    .single();
+
+  // Re-geocode if address changed
+  let coords: { lat: number; lng: number } | null = null;
+  if (current && address !== current.address) {
+    coords = await geocodeAddress(address, current.city);
+  }
+
+  const updateData: Record<string, unknown> = {
+    name,
+    address,
+    phone: phone || null,
+  };
+  if (coords) {
+    updateData.latitude = coords.lat;
+    updateData.longitude = coords.lng;
+  }
+
   const { error } = await supabase
     .from("facilities")
-    .update({
-      name,
-      address,
-      phone: phone || null,
-    })
+    .update(updateData)
     .eq("user_id", user.id);
 
   if (error) {

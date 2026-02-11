@@ -9,7 +9,7 @@ import { Select } from "@/components/ui/input";
 import type { Facility } from "@/types";
 import { CITIES } from "@/config/constants";
 import { formatCurrency } from "@/lib/utils";
-import { updateFacilityStatus } from "@/lib/admin/actions";
+import { updateFacilityStatus, backfillFacilityCoordinates } from "@/lib/admin/actions";
 
 interface FacilitiesClientProps {
   facilities: Facility[];
@@ -18,6 +18,8 @@ interface FacilitiesClientProps {
 export function FacilitiesClient({ facilities }: FacilitiesClientProps) {
   const router = useRouter();
   const [loading, setLoading] = useState<string | null>(null);
+  const [backfilling, setBackfilling] = useState(false);
+  const [backfillResult, setBackfillResult] = useState<string | null>(null);
   const [cityFilter, setCityFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
 
@@ -35,16 +37,50 @@ export function FacilitiesClient({ facilities }: FacilitiesClientProps) {
     router.refresh();
   };
 
+  const needsGeocode = facilities.filter((f) => f.latitude == null).length;
+
+  const handleBackfill = async () => {
+    setBackfilling(true);
+    setBackfillResult(null);
+    const result = await backfillFacilityCoordinates();
+    if (result.error) {
+      setBackfillResult(`Error: ${result.error}`);
+    } else if (result.data) {
+      setBackfillResult(
+        `Done: ${result.data.updated} updated, ${result.data.failed} failed`
+      );
+    }
+    setBackfilling(false);
+    router.refresh();
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-gray-900">
           Cleaning Facilities
         </h1>
-        <Link href="/admin/facilities/create">
-          <Button size="sm">Create Facility</Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          {needsGeocode > 0 && (
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={backfilling}
+              onClick={handleBackfill}
+            >
+              {backfilling
+                ? "Geocoding..."
+                : `Backfill Coordinates (${needsGeocode})`}
+            </Button>
+          )}
+          <Link href="/admin/facilities/create">
+            <Button size="sm">Create Facility</Button>
+          </Link>
+        </div>
       </div>
+      {backfillResult && (
+        <p className="text-sm text-gray-600">{backfillResult}</p>
+      )}
 
       {/* Filters */}
       <div className="flex gap-3">

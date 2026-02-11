@@ -61,13 +61,15 @@ src/
 ├── components/
 │   ├── ui/                 # Button, Card, Badge, Input, Select, Label
 │   ├── layout/             # Sidebar, Header (with profile dropdown + logout), MobileNav
+│   ├── maps/               # FacilityMap (Google Maps with markers, info windows)
 │   └── change-password-form.tsx  # Shared change password form (used by driver, facility)
 ├── lib/
 │   ├── auth/               # Auth actions (login, register, logout, getUser, updateProfile, changePassword)
 │   ├── driver/             # Driver server actions (CRUD, booking, payment, company flows)
 │   ├── facility/           # Facility server actions (orders, stats, revenue, transfers)
 │   ├── agency/             # Company server actions (drivers, requests, stats, compliance)
-│   ├── admin/              # Admin server actions (stats, facilities, transactions, analytics, createFacilityAccount)
+│   ├── admin/              # Admin server actions (stats, facilities, transactions, analytics, createFacilityAccount, backfillCoordinates)
+│   ├── google-maps/        # geocode.ts (server-side address→lat/lng via Google Geocoding API)
 │   ├── stripe/             # Stripe client + server actions (Connect, refunds)
 │   ├── supabase/           # client.ts, server.ts (incl. service role client), session.ts
 │   └── utils.ts            # cn(), formatCurrency(), formatDate(), getServiceName(), etc.
@@ -102,6 +104,8 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 STRIPE_SECRET_KEY=sk_test_...
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
 STRIPE_WEBHOOK_SECRET=whsec_...
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your-google-maps-api-key
+GOOGLE_MAPS_SERVER_API_KEY=your-google-maps-server-key
 ```
 
 ### Stripe Environment Setup
@@ -113,6 +117,14 @@ STRIPE_WEBHOOK_SECRET=whsec_...
   - The webhook signing secret (`whsec_...`) is specific to each endpoint (dashboard vs CLI)
 - **Local dev** uses a different webhook secret from `stripe listen --forward-to localhost:3000/api/webhooks/stripe`
 - All three Stripe env vars (`STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`) are set in both `.env.local` and Vercel (Production + Preview scopes)
+
+### Google Maps Environment Setup
+- Requires a Google Cloud project with **Maps JavaScript API** + **Geocoding API** enabled
+- `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` — client-side, used by `@vis.gl/react-google-maps` to render maps
+- `GOOGLE_MAPS_SERVER_API_KEY` — server-side, used by `geocodeAddress()` to convert addresses to lat/lng
+- Restrict the client key to Maps JavaScript API; restrict the server key to Geocoding API
+- Both keys should be set in `.env.local` and Vercel (Production + Preview scopes)
+- Without keys, maps gracefully degrade to emoji placeholders and geocoding is skipped
 
 ### Deployment
 - **CI/CD**: Vercel is connected to the `CleanBag-io/cleanbag-app` GitHub repo. Pushing to `main` auto-triggers a production deploy — do NOT run `vercel --prod` manually.
@@ -299,10 +311,14 @@ Brand colors available as Tailwind classes:
 - [x] Admin transactions page (`/admin/transactions`) — filterable table
 - [x] Admin analytics page (`/admin/analytics`) — revenue + order charts
 
-**Part D — Google Maps:** (deferred to Sprint 7)
-- [ ] Install maps library, add `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`
-- [ ] Replace map placeholder on `/driver/facilities` with real Google Map + markers
-- [ ] Add map to facility detail page (if lat/lng present)
+**Part D — Google Maps:** ✅ COMPLETE (Sprint 7)
+- [x] `@vis.gl/react-google-maps` library installed
+- [x] Server-side geocoding (`lib/google-maps/geocode.ts`) — auto-geocodes on facility create/update
+- [x] `FacilityMap` component (`components/maps/facility-map.tsx`) — brand-pink markers, info windows, fallback
+- [x] `/driver/facilities` — real Google Map with all facility markers
+- [x] `/driver/facilities/[id]` — single-facility map in Location card
+- [x] Admin backfill action — geocode existing facilities with null coordinates
+- [x] Graceful fallback to emoji placeholder when API key is missing or no geocoded facilities
 
 **RLS Policies (migration 002):**
 - [x] `agency_requests` table RLS — drivers/agencies can view, create, update their own requests
@@ -356,11 +372,11 @@ Brand colors available as Tailwind classes:
 ### Known Issues for Sprint 7
 - **No auto-refresh**: Facility dashboard loads data once on page load (no polling/realtime). Sprint 7 notifications work will add Supabase Realtime subscriptions.
 - **Change Password missing**: Company and admin roles don't have settings pages yet — `ChangePasswordForm` needs to be added when those pages exist.
-- **Google Maps deferred**: `MAP_CONFIG` and lat/lng columns exist but map UI is still placeholder. Facility lat/lng values are null.
+- **Google Maps API keys required**: Set `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` (client) and `GOOGLE_MAPS_SERVER_API_KEY` (server geocoding) in `.env.local` and Vercel. Without them, maps show emoji fallback and new facilities won't be geocoded. Run "Backfill Coordinates" from admin facilities page after setting keys.
 - **No facility rating on DELETE**: The `recalculate_facility_rating` trigger only fires on INSERT/UPDATE, not DELETE. If an order with a rating is deleted, the facility aggregate won't auto-recalculate. The cleanup in E2E test 13g handles this manually.
 
 ### Future Sprints
-- Sprint 7: Notifications (push + in-app), PWA, Google Maps, facility dashboard auto-refresh, polish
+- Sprint 7: Notifications (push + in-app), PWA, facility dashboard auto-refresh, polish
 
 ## Reference Files
 - Prototype (for UI patterns): `../cleanbag-prototype/`

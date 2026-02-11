@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { FacilityMap } from "@/components/maps/facility-map";
 import { getDriver, getFacilities } from "@/lib/driver/actions";
 import { formatCurrency } from "@/lib/utils";
 import { CITIES, PRICING, type City } from "@/config/constants";
@@ -56,19 +57,21 @@ export default async function FacilitiesPage({ searchParams }: PageProps) {
         ))}
       </div>
 
-      {/* Map Placeholder */}
-      <div className="relative h-48 bg-gray-100 rounded-xl overflow-hidden border border-gray-200">
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="text-center">
-            <span className="text-5xl">🗺️</span>
-            <p className="text-gray-500 mt-2">Map view coming soon</p>
+      {/* Map */}
+      <FacilityMap
+        facilities={facilities || []}
+        height="12rem"
+        fallback={
+          <div className="relative h-48 bg-gray-100 rounded-xl overflow-hidden border border-gray-200">
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="text-center">
+                <span className="text-5xl">🗺️</span>
+                <p className="text-gray-500 mt-2">Map view coming soon</p>
+              </div>
+            </div>
           </div>
-        </div>
-        {/* Fake map markers */}
-        <div className="absolute top-1/4 left-1/3 text-2xl">📍</div>
-        <div className="absolute top-1/2 left-2/3 text-2xl">📍</div>
-        <div className="absolute top-2/3 left-1/2 text-2xl">📍</div>
-      </div>
+        }
+      />
 
       {/* Facilities List */}
       <div>

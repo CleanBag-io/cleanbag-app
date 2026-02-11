@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { FacilityMap } from "@/components/maps/facility-map";
 import { getFacility } from "@/lib/driver/actions";
 import { formatCurrency } from "@/lib/utils";
 import { PRICING, SERVICE_TYPES } from "@/config/constants";
@@ -145,28 +146,35 @@ export default async function FacilityDetailPage({ params }: PageProps) {
         </CardContent>
       </Card>
 
-      {/* Map Placeholder */}
+      {/* Location Map */}
       <Card>
         <CardContent className="p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Location</h2>
-          <div className="relative h-48 bg-gray-100 rounded-lg overflow-hidden">
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-center">
-                <span className="text-4xl">📍</span>
-                <p className="text-gray-500 mt-2">{facility.address}</p>
-                <a
-                  href={`https://maps.google.com/?q=${encodeURIComponent(
-                    `${facility.address}, ${facility.city}, Cyprus`
-                  )}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-trust-blue hover:underline text-sm mt-2 inline-block"
-                >
-                  Open in Google Maps →
-                </a>
+          <FacilityMap
+            facilities={[facility]}
+            singleFacility
+            height="12rem"
+            fallback={
+              <div className="relative h-48 bg-gray-100 rounded-lg overflow-hidden">
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="text-center">
+                    <span className="text-4xl">📍</span>
+                    <p className="text-gray-500 mt-2">{facility.address}</p>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
+            }
+          />
+          <a
+            href={`https://maps.google.com/?q=${encodeURIComponent(
+              `${facility.address}, ${facility.city}, Cyprus`
+            )}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-trust-blue hover:underline text-sm mt-3 inline-block"
+          >
+            Open in Google Maps →
+          </a>
         </CardContent>
       </Card>
     </div>

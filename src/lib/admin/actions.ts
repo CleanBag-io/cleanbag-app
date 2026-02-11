@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { geocodeAddress } from "@/lib/google-maps/geocode";
 import { COMMISSION_RATES } from "@/config/constants";
 import type { Facility, Transaction, Order } from "@/types";
 
@@ -323,6 +324,9 @@ export async function createFacilityAccount(data: {
   // Insert facility record
   const defaultServices = [{ type: "standard", price: 4.5, duration: 20 }];
 
+  // Geocode address to lat/lng
+  const coords = await geocodeAddress(address, city);
+
   const { error: facilityError } = await sb.from("facilities").insert({
     user_id: userId,
     name: facilityName,
@@ -334,6 +338,8 @@ export async function createFacilityAccount(data: {
     is_active: true,
     rating: 0,
     total_orders: 0,
+    latitude: coords?.lat ?? null,
+    longitude: coords?.lng ?? null,
   });
 
   if (facilityError) {
@@ -344,4 +350,51 @@ export async function createFacilityAccount(data: {
 
   revalidatePath("/admin/facilities", "page");
   return { data: { email, tempPassword: password } };
+}
+
+// Backfill coordinates for facilities with null lat/lng
+export async function backfillFacilityCoordinates(): Promise<
+  ActionResult<{ updated: number; failed: number }>
+> {
+  const adminCheck = await verifyAdmin();
+  if (adminCheck.error) return { error: adminCheck.error };
+
+  const sb = createServiceRoleClient();
+
+  const { data: facilities, error } = await sb
+    .from("facilities")
+    .select("id, address, city")
+    .is("latitude", null);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  if (!facilities || facilities.length === 0) {
+    return { data: { updated: 0, failed: 0 } };
+  }
+
+  let updated = 0;
+  let failed = 0;
+
+  for (const facility of facilities) {
+    const coords = await geocodeAddress(facility.address, facility.city);
+    if (coords) {
+      const { error: updateError } = await sb
+        .from("facilities")
+        .update({ latitude: coords.lat, longitude: coords.lng })
+        .eq("id", facility.id);
+
+      if (updateError) {
+        failed++;
+      } else {
+        updated++;
+      }
+    } else {
+      failed++;
+    }
+  }
+
+  revalidatePath("/admin/facilities", "page");
+  return { data: { updated, failed } };
 }

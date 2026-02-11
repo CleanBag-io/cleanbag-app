@@ -14,7 +14,7 @@ CleanBag is a food delivery bag cleaning marketplace for Cyprus. This is the pro
 - **Styling**: Tailwind CSS v4 (CSS-based config in `globals.css`)
 - **Database**: Supabase (Postgres + Auth + Realtime)
 - **Package Manager**: pnpm
-- **Deployment**: Vercel ([cleanbag.io](https://cleanbag.io))
+- **Deployment**: Vercel ([cleanbag.io](https://cleanbag.io)) — auto-deploys on push to `main` via CI/CD
 
 ## Quick Start
 ```bash
@@ -114,7 +114,10 @@ STRIPE_WEBHOOK_SECRET=whsec_...
 - **Local dev** uses a different webhook secret from `stripe listen --forward-to localhost:3000/api/webhooks/stripe`
 - All three Stripe env vars (`STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`) are set in both `.env.local` and Vercel (Production + Preview scopes)
 
-### Deployment Environments
+### Deployment
+- **CI/CD**: Vercel is connected to the `CleanBag-io/cleanbag-app` GitHub repo. Pushing to `main` auto-triggers a production deploy — do NOT run `vercel --prod` manually.
+- **Vercel team**: `clean-bag` (account `eric-3596`)
+
 | Env | `NEXT_PUBLIC_SITE_URL` | Notes |
 |---|---|---|
 | Local | `http://localhost:3000` | In `.env.local` |

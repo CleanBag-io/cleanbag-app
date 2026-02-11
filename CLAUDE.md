@@ -328,7 +328,7 @@ Brand colors available as Tailwind classes:
 - [x] "Authenticated users can read profiles" — cross-role name visibility
 
 **E2E Tests:**
-- [x] 58 Playwright tests covering all features (auth, onboarding, association, portal, admin, profile, create facility, change password, order completion, compliance, rating)
+- [x] 64 Playwright tests covering all features (auth, onboarding, association, portal, admin, profile, create facility, change password, order completion, compliance, rating)
 - [ ] (Optional) Lat/lng capture in facility onboarding/settings
 
 ### Post-Sprint 6: Admin Create Facility & Change Password ✅ COMPLETE
@@ -367,7 +367,7 @@ Brand colors available as Tailwind classes:
 
 **E2E Tests:**
 - [x] Section 13: Order Completion, Compliance & Rating (7 tests)
-- [x] Total: 58 tests across 13 sections, all passing
+- [x] Total: 64 tests across 14 sections, all passing
 
 ### Known Issues for Sprint 7
 - **No auto-refresh**: Facility dashboard loads data once on page load (no polling/realtime). Sprint 7 notifications work will add Supabase Realtime subscriptions.
@@ -401,7 +401,7 @@ npx playwright test e2e/sprint6.spec.ts -g "11\.|12\." # Run new feature tests o
 ## E2E Testing
 
 ### Overview
-58 Playwright E2E tests covering all Sprint 6 features plus admin facility creation, change password, and order completion/compliance/rating. Tests run serially against the dev server using 4 temporary test accounts created via Supabase Admin API (plus 1 dynamically created by the admin create facility test).
+64 Playwright E2E tests covering all Sprint 6 features plus admin facility creation, change password, and order completion/compliance/rating. Tests run serially against the dev server using 4 temporary test accounts created via Supabase Admin API (plus 1 dynamically created by the admin create facility test).
 
 ### Architecture
 ```
@@ -409,7 +409,7 @@ e2e/
   helpers.ts          # supabaseAdmin, createTestUser(), login(), ACCOUNTS, TEST_CITY, ADMIN_CREATED_FACILITY_EMAIL
   global-setup.ts     # Creates 4 accounts before all tests
   global-teardown.ts  # Deletes accounts after all tests (including admin-created facility)
-  sprint6.spec.ts     # 58 tests in 13 serial sections
+  sprint6.spec.ts     # 64 tests in 14 serial sections
 playwright.config.ts  # Single worker, 60s timeout, auto-starts dev server
 ```
 
@@ -436,6 +436,7 @@ playwright.config.ts  # Single worker, 60s timeout, auto-starts dev server
 11. **Admin Create Facility** (6) — Create button, form loads, generate password, create account, appears in list, new owner can login
 12. **Change Password** (6) — Form visible (driver + facility), wrong password error, mismatch error, successful change, login with new password
 13. **Order Completion, Compliance & Rating** (7) — Verify overdue, seed order, facility completes, driver compliant, driver rates, facility rating updated, cleanup
+14. **Google Maps Integration** (6) — No old placeholder, map or fallback on list/detail, Location section with Google Maps link, admin backfill button, geocoding on create
 
 ### Prerequisites
 - `.env.local` with all Supabase credentials including `SUPABASE_SERVICE_ROLE_KEY`

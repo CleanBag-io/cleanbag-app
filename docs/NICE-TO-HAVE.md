@@ -26,10 +26,14 @@
 - Include login URL, temp password, and instructions to change password
 - **Why deferred:** Manual credential sharing works for the small pilot scale. Automation matters at 20+ facilities.
 
-### Company & Admin Change Password
-- Add `ChangePasswordForm` to company settings page (when it exists) and admin settings
-- The shared component already exists — just needs to be imported on those pages
-- **Why deferred:** Company settings page doesn't exist yet (Sprint 7 candidate). Admin settings not a priority since there's a single admin.
+### ~~Company Change Password~~ ✅ COMPLETE
+- ~~Add `ChangePasswordForm` to company settings page~~
+- Shipped as part of company settings page (`/agency/settings`)
+
+### Admin Change Password
+- Add `ChangePasswordForm` to an admin settings page
+- The shared component already exists — just needs a page to host it
+- **Why deferred:** Single admin user; low priority.
 
 ---
 
@@ -123,11 +127,11 @@
 
 ## Company Portal
 
-### Company Settings Page
-- Edit company name, city, compliance target
-- Change password (reuse existing `ChangePasswordForm`)
-- Manage notification preferences
-- **Why deferred:** Planned for Sprint 7. Currently company details are set during onboarding.
+### ~~Company Settings Page~~ ✅ COMPLETE
+- ~~Edit company name, city, compliance target~~
+- ~~Change password (reuse existing `ChangePasswordForm`)~~
+- Shipped at `/agency/settings` — profile editing + change password
+- Notification preferences still deferred (depends on notification infrastructure)
 
 ### Compliance Alerts
 - Automatic alerts when fleet compliance rate drops below target
@@ -235,7 +239,7 @@ Based on impact and alignment with Sprint 7 goals (Notifications, PWA, polish):
 | High | ~~Google Maps integration~~ ✅ | — |
 | High | User geolocation & distance sorting | Medium |
 | High | Push notifications (PWA) | High |
-| High | Company settings page + change password | Low |
+| ~~High~~ | ~~Company settings page + change password~~ ✅ | — |
 | Medium | Force password change on first login | Low |
 | Medium | Facility operating hours | Medium |
 | Medium | Rating & review system | Medium |

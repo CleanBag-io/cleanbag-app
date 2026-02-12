@@ -50,6 +50,7 @@ src/
 │   │   ├── drivers/        # Driver list, pending requests, invite flow
 │   │   ├── compliance/     # Compliance overview + CSV export
 │   │   ├── reports/        # Cleaning activity + per-driver breakdown
+│   │   ├── settings/       # Company settings (profile edit + change password)
 │   │   └── onboarding/     # Company setup wizard (name, city, compliance target)
 │   ├── admin/              # Admin panel (/admin/*)
 │   │   ├── dashboard/      # Live stats + recent transactions
@@ -62,7 +63,8 @@ src/
 │   ├── ui/                 # Button, Card, Badge, Input, Select, Label
 │   ├── layout/             # Sidebar, Header (with profile dropdown + logout), MobileNav
 │   ├── maps/               # FacilityMap (Google Maps with markers, info windows)
-│   └── change-password-form.tsx  # Shared change password form (used by driver, facility)
+│   ├── change-password-form.tsx  # Shared change password form (used by driver, facility, company)
+│   └── contact-email.tsx   # Bot-resistant email link (JS-only mailto, zero-width space obfuscation)
 ├── lib/
 │   ├── auth/               # Auth actions (login, register, logout, getUser, updateProfile, changePassword)
 │   ├── driver/             # Driver server actions (CRUD, booking, payment, company flows)
@@ -216,8 +218,8 @@ Brand colors available as Tailwind classes:
 ### Change Password
 - `changePassword()` in `lib/auth/actions.ts` — available to all logged-in users
 - Verifies current password by calling `signInWithPassword()` before allowing update
-- Shared `ChangePasswordForm` component used on driver profile and facility settings pages
-- Company and admin roles will get it when they have settings pages
+- Shared `ChangePasswordForm` component used on driver profile, facility settings, and company settings pages
+- Admin role will get it when an admin settings page exists
 
 ### Layout System
 - Each role has its own layout with Sidebar (desktop) + MobileNav (mobile) + Header
@@ -369,15 +371,27 @@ Brand colors available as Tailwind classes:
 - [x] Section 13: Order Completion, Compliance & Rating (7 tests)
 - [x] Total: 64 tests across 14 sections, all passing
 
-### Known Issues for Sprint 7
+### Sprint 7 (In Progress)
+- [x] Google Maps integration (geocoding, markers, backfill) — see Sprint 6 Part D
+- [x] Company settings page (`/agency/settings`) — edit name, city, compliance target + change password
+- [x] Landing page: sticky footer with Contact Us section (email + WhatsApp)
+- [x] Email obfuscation via `ContactEmail` component (bot-resistant, JS-only mailto with subject pre-fill)
+- [x] WhatsApp link with brand green icon (+357 99 544873)
+- [x] Driver profile mobile fix: compliance badge inline with name, smaller stat card text
+- [x] History page: smaller Last Cleaned text for mobile grid
+- [ ] Push notifications (PWA) — service worker, Web Push API
+- [ ] PWA setup — manifest.json, installable app
+- [ ] Facility dashboard auto-refresh — Supabase Realtime subscriptions
+- [ ] UI polish across all portals
+
+### Known Issues
 - **No auto-refresh**: Facility dashboard loads data once on page load (no polling/realtime). Sprint 7 notifications work will add Supabase Realtime subscriptions.
-- **Change Password missing**: Company and admin roles don't have settings pages yet — `ChangePasswordForm` needs to be added when those pages exist.
+- **Change Password missing on admin**: Admin role doesn't have a settings page yet — `ChangePasswordForm` needs to be added when one exists.
 - **Google Maps API keys required**: Set `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` (client) and `GOOGLE_MAPS_SERVER_API_KEY` (server geocoding) in `.env.local` and Vercel. Without them, maps show emoji fallback and new facilities won't be geocoded. Run "Backfill Coordinates" from admin facilities page after setting keys.
 - **No facility rating on DELETE**: The `recalculate_facility_rating` trigger only fires on INSERT/UPDATE, not DELETE. If an order with a rating is deleted, the facility aggregate won't auto-recalculate. The cleanup in E2E test 13g handles this manually.
 
 ### Future Sprints
-- Sprint 7: Notifications (push + in-app), PWA, facility dashboard auto-refresh, polish
-- Future: User geolocation & distance sorting — browser Geolocation API for driver location on map, Haversine-based distance sort for facility list (see `docs/NICE-TO-HAVE.md`)
+- User geolocation & distance sorting — browser Geolocation API for driver location on map, Haversine-based distance sort for facility list (see `docs/NICE-TO-HAVE.md`)
 
 ## Reference Files
 - Prototype (for UI patterns): `../cleanbag-prototype/`

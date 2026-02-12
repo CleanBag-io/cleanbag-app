@@ -7,6 +7,7 @@ import { createRefund } from "@/lib/stripe/actions";
 import type { Driver, Order, Facility, Agency, AgencyRequest } from "@/types";
 import type { City } from "@/config/constants";
 import { PRICING, COMMISSION_RATES } from "@/config/constants";
+import { createNotification } from "@/lib/notifications/actions";
 
 export type ActionResult<T = void> = {
   error?: string;
@@ -181,7 +182,7 @@ export async function createOrder(formData: FormData): Promise<ActionResult<Orde
   // Get facility to calculate pricing
   const { data: facility, error: facilityError } = await supabase
     .from("facilities")
-    .select("commission_rate")
+    .select("commission_rate, user_id, name")
     .eq("id", facilityId)
     .single();
 
@@ -240,6 +241,15 @@ export async function createOrder(formData: FormData): Promise<ActionResult<Orde
       // Order is created but payment failed — return order without clientSecret
     }
   }
+
+  // Notify the facility about the new order
+  await createNotification({
+    userId: facility.user_id,
+    title: "New Order",
+    message: `A driver has placed a new cleaning order #${order.order_number}`,
+    type: "order",
+    data: { url: "/facility/orders" },
+  });
 
   revalidatePath("/driver/orders", "page");
   return { data: { ...order, clientSecret } };
@@ -344,7 +354,7 @@ export async function cancelOrder(orderId: string): Promise<ActionResult> {
   // Verify the order belongs to this driver and is cancellable
   const { data: order } = await supabase
     .from("orders")
-    .select("status, payment_status, stripe_payment_intent_id")
+    .select("status, payment_status, stripe_payment_intent_id, order_number, facility_id")
     .eq("id", orderId)
     .eq("driver_id", driver.id)
     .single();
@@ -377,6 +387,23 @@ export async function cancelOrder(orderId: string): Promise<ActionResult> {
 
   if (error) {
     return { error: error.message };
+  }
+
+  // Notify the facility about the cancellation
+  const { data: cancelledFacility } = await supabase
+    .from("facilities")
+    .select("user_id")
+    .eq("id", order.facility_id)
+    .single();
+
+  if (cancelledFacility) {
+    await createNotification({
+      userId: cancelledFacility.user_id,
+      title: "Order Cancelled",
+      message: `Order #${order.order_number} has been cancelled by the driver`,
+      type: "order",
+      data: { url: "/facility/orders" },
+    });
   }
 
   revalidatePath("/driver/orders", "page");
@@ -620,6 +647,25 @@ export async function respondToInvitation(
     if (driverError) {
       return { error: driverError.message };
     }
+  }
+
+  // Notify the company about the response
+  const { data: inviteAgency } = await supabase
+    .from("agencies")
+    .select("user_id")
+    .eq("id", request.agency_id)
+    .single();
+
+  if (inviteAgency) {
+    await createNotification({
+      userId: inviteAgency.user_id,
+      title: accept ? "Invitation Accepted" : "Invitation Declined",
+      message: accept
+        ? "A driver has accepted your invitation to join your company"
+        : "A driver has declined your invitation",
+      type: "system",
+      data: { url: "/agency/drivers" },
+    });
   }
 
   revalidatePath("/driver/profile", "page");

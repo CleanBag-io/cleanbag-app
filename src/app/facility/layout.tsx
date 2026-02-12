@@ -2,6 +2,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { getUser } from "@/lib/auth/actions";
+import { PushPermissionPrompt } from "@/components/pwa/push-permission";
 
 const facilityNavItems = [
   { href: "/facility/dashboard", label: "Dashboard", icon: "home" },
@@ -25,8 +26,10 @@ export default async function FacilityLayout({
           title="Cleaning Facility Dashboard"
           role="facility"
           userName={profile?.full_name || undefined}
+          userId={profile?.id}
         />
         <main className="p-4 pb-20 md:pb-4">{children}</main>
+        <PushPermissionPrompt />
         <MobileNav navItems={facilityNavItems} />
       </div>
     </div>

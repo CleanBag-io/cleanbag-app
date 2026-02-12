@@ -7,6 +7,7 @@ import { geocodeAddress } from "@/lib/google-maps/geocode";
 import type { Facility, Order, Driver, Profile } from "@/types";
 import type { OrderStatus } from "@/config/constants";
 import { COMMISSION_RATES } from "@/config/constants";
+import { createNotification } from "@/lib/notifications/actions";
 
 export type ActionResult<T = void> = {
   error?: string;
@@ -232,7 +233,7 @@ export async function acceptOrder(orderId: string): Promise<ActionResult> {
   // Verify order belongs to this facility and is pending
   const { data: order } = await supabase
     .from("orders")
-    .select("status")
+    .select("status, driver_id, order_number")
     .eq("id", orderId)
     .eq("facility_id", facility.id)
     .single();
@@ -255,6 +256,23 @@ export async function acceptOrder(orderId: string): Promise<ActionResult> {
 
   if (error) {
     return { error: error.message };
+  }
+
+  // Notify the driver
+  const { data: acceptDriver } = await supabase
+    .from("drivers")
+    .select("user_id")
+    .eq("id", order.driver_id)
+    .single();
+
+  if (acceptDriver) {
+    await createNotification({
+      userId: acceptDriver.user_id,
+      title: "Order Accepted",
+      message: `Your order #${order.order_number} has been accepted`,
+      type: "order",
+      data: { url: `/driver/orders/${orderId}` },
+    });
   }
 
   revalidatePath("/facility", "layout");
@@ -287,7 +305,7 @@ export async function startOrder(orderId: string): Promise<ActionResult> {
   // Verify order belongs to this facility and is accepted
   const { data: order } = await supabase
     .from("orders")
-    .select("status")
+    .select("status, driver_id, order_number")
     .eq("id", orderId)
     .eq("facility_id", facility.id)
     .single();
@@ -310,6 +328,23 @@ export async function startOrder(orderId: string): Promise<ActionResult> {
 
   if (error) {
     return { error: error.message };
+  }
+
+  // Notify the driver
+  const { data: startDriver } = await supabase
+    .from("drivers")
+    .select("user_id")
+    .eq("id", order.driver_id)
+    .single();
+
+  if (startDriver) {
+    await createNotification({
+      userId: startDriver.user_id,
+      title: "Cleaning Started",
+      message: `Your bag cleaning #${order.order_number} is now in progress`,
+      type: "order",
+      data: { url: `/driver/orders/${orderId}` },
+    });
   }
 
   revalidatePath("/facility", "layout");
@@ -342,7 +377,7 @@ export async function completeOrder(orderId: string): Promise<ActionResult> {
   // Verify order belongs to this facility and is in progress
   const { data: order } = await supabase
     .from("orders")
-    .select("status, driver_id, base_price, commission_amount, stripe_payment_intent_id")
+    .select("status, driver_id, base_price, commission_amount, stripe_payment_intent_id, order_number")
     .eq("id", orderId)
     .eq("facility_id", facility.id)
     .single();
@@ -444,6 +479,23 @@ export async function completeOrder(orderId: string): Promise<ActionResult> {
       total_orders: (facility.total_orders || 0) + 1,
     })
     .eq("id", facility.id);
+
+  // Notify the driver that their order is complete
+  const { data: completeDriver } = await serviceClient
+    .from("drivers")
+    .select("user_id")
+    .eq("id", order.driver_id)
+    .single();
+
+  if (completeDriver) {
+    await createNotification({
+      userId: completeDriver.user_id,
+      title: "Cleaning Complete",
+      message: `Your bag cleaning #${order.order_number} is done! You can now rate the service.`,
+      type: "order",
+      data: { url: `/driver/orders/${orderId}` },
+    });
+  }
 
   revalidatePath("/facility", "layout");
   revalidatePath("/driver", "layout");

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import type { Agency, Driver, Profile, AgencyRequest } from "@/types";
 import type { City } from "@/config/constants";
+import { createNotification } from "@/lib/notifications/actions";
 
 export type ActionResult<T = void> = {
   error?: string;
@@ -223,6 +224,23 @@ export async function sendInvitation(
     return { error: error.message };
   }
 
+  // Notify the driver about the invitation
+  const { data: invitedDriver } = await supabase
+    .from("drivers")
+    .select("user_id")
+    .eq("id", driverId)
+    .single();
+
+  if (invitedDriver) {
+    await createNotification({
+      userId: invitedDriver.user_id,
+      title: "Company Invitation",
+      message: "A company has invited you to join. Check your profile to respond.",
+      type: "system",
+      data: { url: "/driver/profile" },
+    });
+  }
+
   revalidatePath("/agency/drivers", "page");
   return {};
 }
@@ -289,6 +307,25 @@ export async function respondToRequest(
     if (driverError) {
       return { error: driverError.message };
     }
+  }
+
+  // Notify the driver about the response
+  const { data: requestDriver } = await supabase
+    .from("drivers")
+    .select("user_id")
+    .eq("id", request.driver_id)
+    .single();
+
+  if (requestDriver) {
+    await createNotification({
+      userId: requestDriver.user_id,
+      title: accept ? "Request Accepted" : "Request Declined",
+      message: accept
+        ? "Your request to join the company has been accepted!"
+        : "Your request to join the company has been declined.",
+      type: "system",
+      data: { url: "/driver/profile" },
+    });
   }
 
   revalidatePath("/agency", "layout");

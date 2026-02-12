@@ -62,8 +62,10 @@ src/
 │   └── globals.css         # Design tokens (Tailwind v4)
 ├── components/
 │   ├── ui/                 # Button, Card, Badge, Input, Select, Label
-│   ├── layout/             # Sidebar, Header (with profile dropdown + logout), MobileNav
+│   ├── layout/             # Sidebar, Header (with notification bell + profile dropdown), MobileNav
 │   ├── maps/               # FacilityMap (Google Maps with markers, info windows)
+│   ├── notifications/      # NotificationBell (real-time dropdown), NotificationList (full history)
+│   ├── pwa/                # ServiceWorkerRegister, PushPermissionPrompt
 │   ├── change-password-form.tsx  # Shared change password form (used by driver, facility, company)
 │   └── contact-email.tsx   # Bot-resistant email link (JS-only mailto, zero-width space obfuscation)
 ├── lib/
@@ -73,6 +75,8 @@ src/
 │   ├── agency/             # Company server actions (drivers, requests, stats, compliance)
 │   ├── admin/              # Admin server actions (stats, facilities, transactions, analytics, createFacilityAccount, backfillCoordinates)
 │   ├── google-maps/        # geocode.ts (server-side address→lat/lng via Google Geocoding API)
+│   ├── notifications/      # Notification CRUD + createNotification (service role, triggers push)
+│   ├── push/               # Web Push actions (save/remove subscription, send push notification)
 │   ├── stripe/             # Stripe client + server actions (Connect, refunds)
 │   ├── supabase/           # client.ts, server.ts (incl. service role client), session.ts
 │   └── utils.ts            # cn(), formatCurrency(), formatDate(), getServiceName(), etc.
@@ -81,6 +85,8 @@ src/
 └── proxy.ts                # Auth middleware (Next.js 16 convention)
 
 public/
+├── icons/                  # PWA icons (192x192, 512x512, maskable-512x512)
+├── sw.js                   # Service worker (caching, push notifications, notification click)
 ├── logo.svg                # Brand icon (pink checkmark)
 ├── logo.png                # Brand icon (PNG)
 ├── logo-text.svg           # Icon + "CleanBag" text (SVG, uses Avenir font)
@@ -92,7 +98,8 @@ supabase/
 ├── migrations/
 │   ├── 001-sprint5-pricing.sql  # Sprint 5: pricing + transactions policy
 │   ├── 002-sprint6-agency-requests.sql  # Sprint 6: agency_requests table + RLS
-│   └── 003-facility-rating-trigger.sql  # Facility rating aggregation trigger
+│   ├── 003-facility-rating-trigger.sql  # Facility rating aggregation trigger
+│   └── 004-notifications-push.sql  # Sprint 7: Realtime for notifications + push_subscriptions table
 ├── seed-test-data.sql      # Sample data for testing (edit UUIDs first)
 └── reset-data.sql          # Wipe ALL data including auth users
 ```
@@ -109,6 +116,8 @@ NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
 STRIPE_WEBHOOK_SECRET=whsec_...
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your-google-maps-api-key
 GOOGLE_MAPS_SERVER_API_KEY=your-google-maps-server-key
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=your-vapid-public-key
+VAPID_PRIVATE_KEY=your-vapid-private-key
 ```
 
 ### Stripe Environment Setup
@@ -150,8 +159,9 @@ Run these SQL files in Supabase SQL Editor (in order):
 3. `supabase/migrations/001-sprint5-pricing.sql` - Sprint 5: pricing simplification + transactions INSERT policy
 4. `supabase/migrations/002-sprint6-agency-requests.sql` - Sprint 6: agency_requests table + cross-table RLS (uses profiles for role checks)
 5. `supabase/migrations/003-facility-rating-trigger.sql` - Auto-recalculates facility.rating on order rating changes
+6. `supabase/migrations/004-notifications-push.sql` - Enables Supabase Realtime for notifications + push_subscriptions table with RLS
 
-**Tables**: profiles, drivers, facilities, agencies, orders, transactions, notifications
+**Tables**: profiles, drivers, facilities, agencies, orders, transactions, notifications, push_subscriptions
 
 **Key features**:
 - Row Level Security (RLS) on all tables
@@ -225,7 +235,15 @@ Brand colors available as Tailwind classes:
 ### Layout System
 - Each role has its own layout with Sidebar (desktop) + MobileNav (mobile) + Header
 - Layouts are server components that fetch user profile and pass to Header
-- Header receives `role` and `userName` props for the profile dropdown
+- Header receives `role`, `userName`, and `userId` props for profile dropdown and notification bell
+- Each layout includes `PushPermissionPrompt` for push notification opt-in
+
+### Notifications & PWA
+- **PWA**: `manifest.ts` generates `/manifest.webmanifest`, `public/sw.js` handles caching + push events, `ServiceWorkerRegister` in root layout
+- **In-App Notifications**: `createNotification()` uses service role to insert (caller is not the recipient). Bell dropdown shows real-time updates via Supabase Realtime channel filtered by `user_id`.
+- **Push Notifications**: `web-push` library with VAPID keys. `sendPushNotification()` is called fire-and-forget inside `createNotification()`. Auto-deletes expired subscriptions (410/404).
+- **Notification Triggers**: 8 server actions call `createNotification()` after successful mutations: createOrder, cancelOrder, acceptOrder, startOrder, completeOrder, sendInvitation, respondToRequest, respondToInvitation
+- **Push Permission**: Banner appears 3s after page load when `Notification.permission === "default"`. Subscribes via `pushManager.subscribe()` and saves to DB.
 
 ## Sprint Progress
 
@@ -381,15 +399,18 @@ Brand colors available as Tailwind classes:
 - [x] Driver profile mobile fix: compliance badge inline with name, smaller stat card text
 - [x] History page: smaller Last Cleaned text for mobile grid
 - [x] Vercel Analytics (`@vercel/analytics` in root layout, enabled on Vercel dashboard)
-- [ ] Push notifications (PWA) — service worker, Web Push API
-- [ ] PWA setup — manifest.json, installable app
+- [x] PWA setup — `manifest.ts` (installable app), `sw.js` (service worker), PWA icons in `public/icons/`
+- [x] In-app notifications — `NotificationBell` with real-time Supabase Realtime, `NotificationList` with time grouping, 4 notification pages, 8 trigger points in server actions
+- [x] Push notifications — `web-push` with VAPID keys, subscription management, `PushPermissionPrompt` banner, auto-cleanup expired subs
+- [x] Database migration `004-notifications-push.sql` — Realtime for notifications table + push_subscriptions table with RLS
 - [ ] Facility dashboard auto-refresh — Supabase Realtime subscriptions
 - [ ] UI polish across all portals
 
 ### Known Issues
-- **No auto-refresh**: Facility dashboard loads data once on page load (no polling/realtime). Sprint 7 notifications work will add Supabase Realtime subscriptions.
+- **No auto-refresh**: Facility dashboard loads data once on page load (no polling/realtime). Notification bell has Realtime but the dashboard data itself doesn't auto-refresh yet.
 - **Change Password missing on admin**: Admin role doesn't have a settings page yet — `ChangePasswordForm` needs to be added when one exists.
 - **Google Maps API keys required**: Set `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` (client) and `GOOGLE_MAPS_SERVER_API_KEY` (server geocoding) in `.env.local` and Vercel. Without them, maps show emoji fallback and new facilities won't be geocoded. Run "Backfill Coordinates" from admin facilities page after setting keys.
+- **VAPID keys required for push**: Set `NEXT_PUBLIC_VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` in `.env.local` and Vercel. Without them, push notifications are silently skipped (in-app notifications still work).
 - **No facility rating on DELETE**: The `recalculate_facility_rating` trigger only fires on INSERT/UPDATE, not DELETE. If an order with a rating is deleted, the facility aggregate won't auto-recalculate. The cleanup in E2E test 13g handles this manually.
 
 ### Future Sprints

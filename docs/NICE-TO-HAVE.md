@@ -77,17 +77,17 @@
 - Stored in a `driver_favourites` junction table
 - **Why deferred:** With only a handful of facilities per city, browsing is fast enough.
 
-### Push Notifications (PWA)
-- Notify drivers when: order accepted, cleaning complete, company invitation received
-- Uses Web Push API via service worker
-- Requires PWA setup (manifest.json, service worker registration)
-- **Why deferred:** Planned for Sprint 7. Currently users check dashboards manually.
+### ~~Push Notifications (PWA)~~ ✅ COMPLETE
+- ~~Notify drivers when: order accepted, cleaning complete, company invitation received~~
+- ~~Uses Web Push API via service worker~~
+- ~~Requires PWA setup (manifest.json, service worker registration)~~
+- Shipped in Sprint 7: PWA installable app, in-app notification bell with real-time updates (Supabase Realtime), push notifications via `web-push` + VAPID keys, 8 notification triggers across all server actions
 
 ### Cleaning Reminders
 - Automatic reminders when compliance status is about to change to "warning" or "overdue"
 - Configurable frequency (e.g., 5 days, 7 days after last clean)
 - Delivered via push notification or email
-- **Why deferred:** Depends on notification infrastructure (Sprint 7).
+- **Why deferred:** Notification infrastructure now exists (Sprint 7). Could be implemented as a scheduled function (Supabase Edge Function or cron) that checks `last_cleaning_date` and calls `createNotification()`.
 
 ### Driver QR Code Check-In
 - Each facility displays a unique QR code
@@ -137,7 +137,7 @@
 - Automatic alerts when fleet compliance rate drops below target
 - Per-driver overdue notifications sent to company dashboard
 - Weekly compliance summary email
-- **Why deferred:** Depends on notification infrastructure (Sprint 7).
+- **Why deferred:** Notification infrastructure now exists (Sprint 7). Could be implemented as a scheduled function using `createNotification()`.
 
 ### Driver Cleaning Schedule
 - Company can set cleaning schedules for their drivers
@@ -177,17 +177,16 @@
 - Respects system preference with manual override
 - **Why deferred:** Nice-to-have polish. Not a priority for MVP.
 
-### Rating & Review System
-- Drivers rate facilities after cleaning (1-5 stars + optional comment)
-- Facility average rating displayed on cards and detail pages
-- Rating field already exists in DB (`facilities.rating`) but is never updated
-- **Why deferred:** Meaningful only with sufficient order volume. Can be added post-pilot.
+### ~~Rating & Review System~~ ✅ COMPLETE
+- ~~Drivers rate facilities after cleaning (1-5 stars + optional comment)~~
+- ~~Facility average rating displayed on cards and detail pages~~
+- Shipped in post-Sprint 6 fixes: `rateOrder()` action, DB trigger `recalculate_facility_rating`, E2E test section 13
 
 ### Real-Time Order Updates
 - Use Supabase Realtime subscriptions for live order status updates
 - Facility dashboard auto-refreshes when new orders arrive
 - Driver sees order status change without page reload
-- **Why deferred:** Manual refresh works for low-volume pilot. Real-time shines at scale.
+- **Status:** Partially done — notification bell uses Supabase Realtime for instant notification delivery. Dashboard data auto-refresh still pending (Sprint 7 remaining item).
 
 ### Analytics Export
 - Export admin analytics data as CSV or PDF
@@ -238,11 +237,11 @@ Based on impact and alignment with Sprint 7 goals (Notifications, PWA, polish):
 |----------|---------|--------|
 | High | ~~Google Maps integration~~ ✅ | — |
 | High | User geolocation & distance sorting | Medium |
-| High | Push notifications (PWA) | High |
+| ~~High~~ | ~~Push notifications (PWA)~~ ✅ | — |
 | ~~High~~ | ~~Company settings page + change password~~ ✅ | — |
 | Medium | Force password change on first login | Low |
+| Medium | Cleaning reminders (scheduled notifications) | Medium |
 | Medium | Facility operating hours | Medium |
-| Medium | Rating & review system | Medium |
 | Low | Email notifications for account creation | Low |
 | Low | Dark mode | Medium |
 | Low | Multi-language (Greek) | High |

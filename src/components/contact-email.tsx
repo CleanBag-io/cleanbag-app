@@ -10,7 +10,8 @@ export function ContactEmail({ className }: { className?: string }) {
       className={className}
       onClick={(e) => {
         e.preventDefault();
-        window.location.href = ["ma", "il", "to:", u, "@", d].join("");
+        const s = encodeURIComponent("CleanBag Support Request");
+        window.location.href = ["ma", "il", "to:", u, "@", d, "?subject=", s].join("");
       }}
     >
       {u}

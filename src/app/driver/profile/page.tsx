@@ -62,13 +62,15 @@ export default async function ProfilePage() {
               {profile.full_name?.charAt(0)?.toUpperCase() || "👤"}
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">
-                {profile.full_name || "Driver"}
-              </h2>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-xl font-semibold text-gray-900">
+                  {profile.full_name || "Driver"}
+                </h2>
+                <Badge variant={complianceInfo.variant}>
+                  {complianceInfo.label}
+                </Badge>
+              </div>
               <p className="text-gray-500">{driver?.city || "No city set"}</p>
-              <Badge variant={complianceInfo.variant} className="mt-2">
-                {complianceInfo.label}
-              </Badge>
             </div>
           </div>
         </CardContent>
@@ -87,7 +89,7 @@ export default async function ProfilePage() {
           </Card>
           <Card>
             <CardContent className="p-4 text-center">
-              <p className={`text-2xl font-bold ${complianceInfo.color}`}>
+              <p className={`text-xl font-bold ${complianceInfo.color}`}>
                 {complianceInfo.label}
               </p>
               <p className="text-xs text-gray-500 mt-1">Status</p>
@@ -95,7 +97,7 @@ export default async function ProfilePage() {
           </Card>
           <Card>
             <CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-gray-900">
+              <p className="text-lg font-bold text-gray-900">
                 {getRelativeTime(driver.last_cleaning_date)}
               </p>
               <p className="text-xs text-gray-500 mt-1">Last Clean</p>

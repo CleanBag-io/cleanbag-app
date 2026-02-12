@@ -223,10 +223,10 @@
 - **Why deferred:** Solo developer workflow doesn't need CI gates yet. Valuable before adding team members.
 
 ### Monitoring & Observability
-- Application performance monitoring (Vercel Analytics, or custom)
+- ~~Application performance monitoring (Vercel Analytics)~~ ✅ Enabled — `@vercel/analytics` in root layout, dashboard enabled on Vercel
 - Supabase query performance tracking
 - Uptime monitoring for cleanbag.io
-- **Why deferred:** Low traffic during pilot. Add before scaling.
+- **Why deferred:** Vercel Analytics covers web vitals and page views. Supabase monitoring and uptime tracking add before scaling.
 
 ---
 

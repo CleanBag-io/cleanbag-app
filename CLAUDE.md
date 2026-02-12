@@ -14,6 +14,7 @@ CleanBag is a food delivery bag cleaning marketplace for Cyprus. This is the pro
 - **Styling**: Tailwind CSS v4 (CSS-based config in `globals.css`)
 - **Database**: Supabase (Postgres + Auth + Realtime)
 - **Package Manager**: pnpm
+- **Analytics**: Vercel Analytics (`@vercel/analytics`)
 - **Deployment**: Vercel ([cleanbag.io](https://cleanbag.io)) — auto-deploys on push to `main` via CI/CD
 
 ## Quick Start
@@ -379,6 +380,7 @@ Brand colors available as Tailwind classes:
 - [x] WhatsApp link with brand green icon (+357 99 544873)
 - [x] Driver profile mobile fix: compliance badge inline with name, smaller stat card text
 - [x] History page: smaller Last Cleaned text for mobile grid
+- [x] Vercel Analytics (`@vercel/analytics` in root layout, enabled on Vercel dashboard)
 - [ ] Push notifications (PWA) — service worker, Web Push API
 - [ ] PWA setup — manifest.json, installable app
 - [ ] Facility dashboard auto-refresh — Supabase Realtime subscriptions

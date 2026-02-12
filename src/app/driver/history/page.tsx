@@ -69,7 +69,7 @@ export default async function HistoryPage() {
 
         <Card>
           <CardContent className="p-4 text-center">
-            <p className="text-3xl font-bold text-trust-blue">
+            <p className="text-2xl font-bold text-trust-blue">
               {getRelativeTime(driver?.last_cleaning_date || null)}
             </p>
             <p className="text-sm text-gray-500 mt-1">Last Cleaned</p>

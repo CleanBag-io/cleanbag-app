@@ -19,7 +19,7 @@ export const metadata: Metadata = {
     title: "CleanBag",
   },
   other: {
-    "mobile-web-app-capable": "yes",
+    "apple-mobile-web-app-capable": "yes",
   },
 };
 

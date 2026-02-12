@@ -8,6 +8,7 @@ const agencyNavItems = [
   { href: "/agency/drivers", label: "Drivers", icon: "users" },
   { href: "/agency/compliance", label: "Compliance", icon: "shield" },
   { href: "/agency/reports", label: "Reports", icon: "chart" },
+  { href: "/agency/settings", label: "Settings", icon: "settings" },
 ];
 
 export default async function AgencyLayout({

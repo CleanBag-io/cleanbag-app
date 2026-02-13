@@ -111,11 +111,19 @@
 - Stored in Supabase Storage
 - **Why deferred:** Adds storage complexity. Text descriptions suffice for pilot.
 
-### Multi-Service Pricing
-- Support for multiple service types with different prices and durations
-- Currently hardcoded to "Clean Delivery Bag" at €4.50
-- Would need service selection UI in the booking flow
+### Multi-Service Support (Hardcoded)
+- Add more services to `SERVICE_TYPES` in constants (e.g., "Clean Delivery Car" at €15)
+- Service picker in booking form, dynamic pricing in `createOrder()`, DB constraint migration
+- All cleaning facilities offer the same menu — no per-facility customization yet
+- **Plan:** [`docs/MULTI-SERVICE.md`](MULTI-SERVICE.md)
+- **Effort:** Small-Medium (5 files, no schema redesign)
 - **Why deferred:** Single service simplifies MVP. Multi-service when demand is proven.
+
+### Per-Facility Service Management
+- Facilities choose which services they offer and set custom prices
+- Requires a `facility_services` DB table and management UI in facility settings
+- Depends on hardcoded multi-service support being in place first
+- **Why deferred:** Over-engineered for pilot. Hardcoded services cover initial needs.
 
 ### Order Queue Management
 - Real-time order queue with estimated wait times

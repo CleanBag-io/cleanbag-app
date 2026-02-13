@@ -6,6 +6,8 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: "CleanBag",
     description:
       "Professional bag cleaning services for food delivery drivers in Cyprus",
+    id: "/",
+    scope: "/",
     start_url: "/login",
     display: "standalone",
     theme_color: "#eb2573",

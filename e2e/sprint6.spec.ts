@@ -1290,7 +1290,7 @@ test.describe.serial("15. PWA & Notifications", () => {
     expect(response?.status()).toBe(200);
 
     const text = await response?.text();
-    expect(text).toContain("cleanbag-v1");
+    expect(text).toContain("cleanbag-v2");
     expect(text).toContain("push");
     expect(text).toContain("notificationclick");
   });
@@ -1514,7 +1514,285 @@ test.describe.serial("15. PWA & Notifications", () => {
     await expect(page.locator("h3:has-text('Today')")).toBeVisible();
   });
 
-  test("15n. Cleanup — remove test notifications", async () => {
+  // ── Order Notification Flow (15n–15t) ──────────────────────────
+  // These tests exercise notifications triggered by real server actions
+  // (acceptOrder, startOrder, completeOrder) rather than DB inserts.
+
+  let notifTestOrderId: string;
+
+  test("15n. Seed pending order for notification tests", async ({ page }) => {
+    // Ensure driver is onboarded (creates drivers record)
+    await login(page, ACCOUNTS.driver.email, TEST_PASSWORD);
+    await page.goto("/driver/dashboard");
+    await page.waitForLoadState("networkidle");
+    if (page.url().includes("/onboarding")) {
+      await page.click("text=Motorcycle");
+      await page.click("button:has-text('Continue')");
+      await page.click("text=Wolt");
+      await page.click("button:has-text('Continue')");
+      await page.selectOption("select#city", TEST_CITY);
+      await page.click("button:has-text('Complete Setup')");
+      await page.waitForURL(/\/driver\/dashboard/, { timeout: 15000 });
+    }
+
+    // Clear session before logging in as facility
+    await page.context().clearCookies();
+
+    // Ensure facility is onboarded (creates facilities record)
+    try {
+      await login(page, ACCOUNTS.facility.email, NEW_PASSWORD);
+    } catch {
+      await login(page, ACCOUNTS.facility.email, TEST_PASSWORD);
+    }
+    await page.goto("/facility/dashboard");
+    await page.waitForLoadState("networkidle");
+    if (page.url().includes("/onboarding")) {
+      await page.fill("input#name", "E2E Test Facility");
+      await page.click("button:has-text('Continue')");
+      await page.fill("input#address", "123 Test Street");
+      await page.selectOption("select#city", TEST_CITY);
+      await page.click("button:has-text('Complete Setup')");
+      await page.waitForURL(/\/facility\/dashboard/, { timeout: 15000 });
+    }
+
+    // Look up driver and facility profiles
+    const { data: driverProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("role", "driver")
+      .ilike("full_name", "%E2E%")
+      .limit(1)
+      .single();
+    const { data: facilityProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("role", "facility")
+      .ilike("full_name", "%E2E%")
+      .limit(1)
+      .single();
+
+    expect(driverProfile).not.toBeNull();
+    expect(facilityProfile).not.toBeNull();
+
+    // Clean any existing driver notifications so counts are predictable
+    await supabaseAdmin
+      .from("notifications")
+      .delete()
+      .eq("user_id", driverProfile!.id);
+
+    // Get the driver and facility record IDs
+    const { data: driver } = await supabaseAdmin
+      .from("drivers")
+      .select("id")
+      .eq("user_id", driverProfile!.id)
+      .single();
+    const { data: facility } = await supabaseAdmin
+      .from("facilities")
+      .select("id")
+      .eq("user_id", facilityProfile!.id)
+      .single();
+
+    expect(driver).not.toBeNull();
+    expect(facility).not.toBeNull();
+
+    // Insert a pending order (simulating a paid booking, pre-accept)
+    const { data: order, error } = await supabaseAdmin
+      .from("orders")
+      .insert({
+        driver_id: driver!.id,
+        facility_id: facility!.id,
+        service_type: "standard",
+        status: "pending",
+        payment_status: "paid",
+        base_price: 4.5,
+        total_price: 4.5,
+        commission_amount: 2.12,
+      })
+      .select("id")
+      .single();
+
+    expect(error).toBeNull();
+    expect(order).not.toBeNull();
+    notifTestOrderId = order!.id;
+  });
+
+  test("15o. Facility accepts order → driver gets notification", async ({ page }) => {
+    // Login as facility
+    try {
+      await login(page, ACCOUNTS.facility.email, NEW_PASSWORD);
+    } catch {
+      await login(page, ACCOUNTS.facility.email, TEST_PASSWORD);
+    }
+    await page.goto("/facility/orders");
+    await page.waitForLoadState("networkidle");
+
+    // Click "Accept Order" on the pending order
+    const acceptBtn = page.locator("button:has-text('Accept Order')").first();
+    await expect(acceptBtn).toBeVisible({ timeout: 15000 });
+    await acceptBtn.click();
+
+    // Wait for server action to process + notification to be created
+    await page.waitForTimeout(3000);
+
+    // Verify notification was created for the driver
+    const { data: driverProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("role", "driver")
+      .ilike("full_name", "%E2E%")
+      .limit(1)
+      .single();
+
+    const { data: notifs } = await supabaseAdmin
+      .from("notifications")
+      .select("title")
+      .eq("user_id", driverProfile!.id)
+      .order("created_at", { ascending: false });
+
+    expect(notifs?.some((n) => n.title === "Order Accepted")).toBe(true);
+  });
+
+  test("15p. Facility starts order → driver gets notification", async ({ page }) => {
+    try {
+      await login(page, ACCOUNTS.facility.email, NEW_PASSWORD);
+    } catch {
+      await login(page, ACCOUNTS.facility.email, TEST_PASSWORD);
+    }
+    await page.goto("/facility/orders");
+    await page.waitForLoadState("networkidle");
+
+    // Click "Start Cleaning" on the accepted order
+    const startBtn = page.locator("button:has-text('Start Cleaning')").first();
+    await expect(startBtn).toBeVisible({ timeout: 15000 });
+    await startBtn.click();
+
+    await page.waitForTimeout(3000);
+
+    const { data: driverProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("role", "driver")
+      .ilike("full_name", "%E2E%")
+      .limit(1)
+      .single();
+
+    const { data: notifs } = await supabaseAdmin
+      .from("notifications")
+      .select("title")
+      .eq("user_id", driverProfile!.id)
+      .order("created_at", { ascending: false });
+
+    expect(notifs?.some((n) => n.title === "Cleaning Started")).toBe(true);
+  });
+
+  test("15q. Facility completes order → driver gets notification", async ({ page }) => {
+    try {
+      await login(page, ACCOUNTS.facility.email, NEW_PASSWORD);
+    } catch {
+      await login(page, ACCOUNTS.facility.email, TEST_PASSWORD);
+    }
+    await page.goto("/facility/orders");
+    await page.waitForLoadState("networkidle");
+
+    // Click "Mark Complete" on the in-progress order
+    const completeBtn = page.locator("button:has-text('Mark Complete')").first();
+    await expect(completeBtn).toBeVisible({ timeout: 15000 });
+    await completeBtn.click();
+
+    await page.waitForTimeout(3000);
+
+    const { data: driverProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("role", "driver")
+      .ilike("full_name", "%E2E%")
+      .limit(1)
+      .single();
+
+    const { data: notifs } = await supabaseAdmin
+      .from("notifications")
+      .select("title")
+      .eq("user_id", driverProfile!.id)
+      .order("created_at", { ascending: false });
+
+    expect(notifs?.some((n) => n.title === "Cleaning Complete")).toBe(true);
+  });
+
+  test("15r. Driver bell shows 3 unread notifications", async ({ page }) => {
+    await login(page, ACCOUNTS.driver.email, TEST_PASSWORD);
+    await page.goto("/driver/dashboard");
+    await page.waitForLoadState("networkidle");
+
+    // Bell badge should show "3"
+    const badge = page.locator("header span.bg-red-500");
+    await expect(badge).toBeVisible({ timeout: 10000 });
+    await expect(badge).toHaveText("3");
+
+    // Open the dropdown
+    const bellButton = page.locator("header button").filter({
+      has: page.locator("svg path[d*='M15 17h5l-1.405']"),
+    });
+    await bellButton.first().click();
+
+    // All 3 notification titles should be visible in dropdown
+    await expect(page.locator("text=Order Accepted")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator("text=Cleaning Started")).toBeVisible();
+    await expect(page.locator("text=Cleaning Complete")).toBeVisible();
+  });
+
+  test("15s. Notification click navigates to order page", async ({ page }) => {
+    await login(page, ACCOUNTS.driver.email, TEST_PASSWORD);
+    await page.goto("/driver/dashboard");
+    await page.waitForLoadState("networkidle");
+
+    // Open the bell dropdown
+    const bellButton = page.locator("header button").filter({
+      has: page.locator("svg path[d*='M15 17h5l-1.405']"),
+    });
+    await bellButton.first().click();
+
+    // Click the "Cleaning Complete" notification (most recent, should be first)
+    const notifItem = page.locator("button:has-text('Cleaning Complete')").first();
+    await expect(notifItem).toBeVisible({ timeout: 5000 });
+    await notifItem.click();
+
+    // Should navigate to the order detail page
+    await page.waitForURL(/\/driver\/orders\//, { timeout: 10000 });
+    expect(page.url()).toContain(`/driver/orders/${notifTestOrderId}`);
+  });
+
+  test("15t. View all link goes to notifications page", async ({ page }) => {
+    await login(page, ACCOUNTS.driver.email, TEST_PASSWORD);
+    await page.goto("/driver/dashboard");
+    await page.waitForLoadState("networkidle");
+
+    // Open bell dropdown
+    const bellButton = page.locator("header button").filter({
+      has: page.locator("svg path[d*='M15 17h5l-1.405']"),
+    });
+    await bellButton.first().click();
+
+    // Click "View all notifications"
+    const viewAllBtn = page.locator("button:has-text('View all notifications')");
+    await expect(viewAllBtn).toBeVisible({ timeout: 5000 });
+    await viewAllBtn.click();
+
+    // Should navigate to the notifications page
+    await page.waitForURL(/\/driver\/notifications/, { timeout: 10000 });
+
+    // All 3 notification titles should be visible
+    await expect(page.locator("text=Order Accepted")).toBeVisible({ timeout: 10000 });
+    await expect(page.locator("text=Cleaning Started")).toBeVisible();
+    await expect(page.locator("text=Cleaning Complete")).toBeVisible();
+  });
+
+  test("15u. Cleanup — remove test order and notifications", async () => {
+    // Clean up the notification test order + its transactions
+    if (notifTestOrderId) {
+      await supabaseAdmin.from("transactions").delete().eq("order_id", notifTestOrderId);
+      await supabaseAdmin.from("orders").delete().eq("id", notifTestOrderId);
+    }
+
     // Clean up notifications for all test accounts
     for (const account of Object.values(ACCOUNTS)) {
       const { data: profile } = await supabaseAdmin
@@ -1529,6 +1807,38 @@ test.describe.serial("15. PWA & Notifications", () => {
           .delete()
           .eq("user_id", profile.id);
       }
+    }
+
+    // Reset driver compliance (completeOrder updates these)
+    const { data: driverProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("role", "driver")
+      .ilike("full_name", "%E2E%")
+      .limit(1)
+      .single();
+
+    if (driverProfile) {
+      await supabaseAdmin
+        .from("drivers")
+        .update({ last_cleaning_date: null, compliance_status: "overdue", total_cleanings: 0 })
+        .eq("user_id", driverProfile.id);
+    }
+
+    // Reset facility total_orders
+    const { data: facilityProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("role", "facility")
+      .ilike("full_name", "%E2E%")
+      .limit(1)
+      .single();
+
+    if (facilityProfile) {
+      await supabaseAdmin
+        .from("facilities")
+        .update({ total_orders: 0 })
+        .eq("user_id", facilityProfile.id);
     }
 
     expect(true).toBe(true);

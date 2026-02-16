@@ -393,7 +393,7 @@ Brand colors available as Tailwind classes:
 
 **E2E Tests:**
 - [x] Section 13: Order Completion, Compliance & Rating (7 tests)
-- [x] Total: 78 tests across 15 sections, all passing
+- [x] Total: 85 tests across 15 sections, all passing
 
 ### Sprint 7 (In Progress)
 - [x] Google Maps integration (geocoding, markers, backfill) — see Sprint 6 Part D
@@ -411,7 +411,7 @@ Brand colors available as Tailwind classes:
 - [x] iOS PWA fixes — `apple-icon.png` (180x180 via Next.js file convention), `apple-mobile-web-app-capable` meta tag, SW `scope`/`updateViaCache` options, `Cache-Control` headers for sw.js in `next.config.ts`, manifest `id`/`scope` fields
 - [x] v1.1 padded logo icons — all PWA icons regenerated from `cleanbag-logo-v1.1/Icon.png` (padded for circular/rounded masks), `public/icon.svg` added, favicon updated
 - [x] SW resilience — `cache.addAll` replaced with individual `cache.add` + `Promise.allSettled` (single asset failure no longer kills SW), cache bumped to `cleanbag-v2`
-- [x] E2E Section 15: PWA & Notifications (14 tests) — manifest, SW, icons, notification bell, pages, real-time notification flow, mark all read, cleanup
+- [x] E2E Section 15: PWA & Notifications (21 tests) — manifest, SW, icons, notification bell, pages, real-time notification flow, mark all read, order notification flow (accept/start/complete → driver notifications, bell badge, click-through, view all), cleanup
 - [ ] Facility dashboard auto-refresh — Supabase Realtime subscriptions
 - [ ] UI polish across all portals
 
@@ -436,7 +436,7 @@ pnpm dev                                    # Start dev server (http://localhost
 pnpm build                                  # Production build
 pnpm start                                  # Run production build
 pnpm lint                                   # Run ESLint
-npx playwright test e2e/sprint6.spec.ts     # Run E2E tests (78 tests, ~5 min)
+npx playwright test e2e/sprint6.spec.ts     # Run E2E tests (85 tests, ~7 min)
 npx playwright test e2e/sprint6.spec.ts -g "8. Admin"  # Run specific section
 npx playwright test e2e/sprint6.spec.ts -g "11\.|12\." # Run new feature tests only
 ```
@@ -448,7 +448,7 @@ npx playwright test e2e/sprint6.spec.ts -g "11\.|12\." # Run new feature tests o
 ## E2E Testing
 
 ### Overview
-78 Playwright E2E tests covering all features through Sprint 7 including PWA & notifications. Tests run serially against the dev server using 4 temporary test accounts created via Supabase Admin API (plus 1 dynamically created by the admin create facility test).
+85 Playwright E2E tests covering all features through Sprint 7 including PWA, notifications, and server-action-triggered notification flows. Tests run serially against the dev server using 4 temporary test accounts created via Supabase Admin API (plus 1 dynamically created by the admin create facility test).
 
 ### Architecture
 ```
@@ -456,7 +456,7 @@ e2e/
   helpers.ts          # supabaseAdmin, createTestUser(), login(), ACCOUNTS, TEST_CITY, ADMIN_CREATED_FACILITY_EMAIL
   global-setup.ts     # Creates 4 accounts before all tests
   global-teardown.ts  # Deletes accounts after all tests (including admin-created facility)
-  sprint6.spec.ts     # 78 tests in 15 serial sections
+  sprint6.spec.ts     # 85 tests in 15 serial sections
 playwright.config.ts  # Single worker, 60s timeout, auto-starts dev server
 ```
 
@@ -469,7 +469,7 @@ playwright.config.ts  # Single worker, 60s timeout, auto-starts dev server
 | admin | e2e-admin@test.com | E2E Admin |
 | facility (dynamic) | e2e-created-facility@test.com | Created by admin test, cleaned up in teardown |
 
-### Test Sections (78 tests)
+### Test Sections (85 tests)
 1. **Auth & Login** (5) — Login all roles + unauthenticated redirect
 2. **Driver Onboarding** (2) — Wizard + dashboard
 3. **Facility Onboarding** (1) — Wizard
@@ -484,7 +484,7 @@ playwright.config.ts  # Single worker, 60s timeout, auto-starts dev server
 12. **Change Password** (6) — Form visible (driver + facility), wrong password error, mismatch error, successful change, login with new password
 13. **Order Completion, Compliance & Rating** (7) — Verify overdue, seed order, facility completes, driver compliant, driver rates, facility rating updated, cleanup
 14. **Google Maps Integration** (6) — No old placeholder, map or fallback on list/detail, Location section with Google Maps link, admin backfill button, geocoding on create
-15. **PWA & Notifications** (14) — Manifest valid, SW accessible, icon files, notification bell (driver + facility), bell dropdown, notification pages (all 4 roles), DB notification appears in bell via Realtime, mark all read, notifications page, cleanup
+15. **PWA & Notifications** (21) — Manifest valid, SW accessible, icon files, notification bell (driver + facility), bell dropdown, notification pages (all 4 roles), DB notification appears in bell via Realtime, mark all read, notifications page, order notification flow (seed order, facility accepts/starts/completes → driver gets notifications, bell badge count, notification click-through to order, view all notifications page), cleanup
 
 ### Prerequisites
 - `.env.local` with all Supabase credentials including `SUPABASE_SERVICE_ROLE_KEY`

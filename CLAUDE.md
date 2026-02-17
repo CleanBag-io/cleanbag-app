@@ -28,7 +28,7 @@ pnpm dev
 ```
 src/
 ├── app/
-│   ├── (marketing)/        # Landing page (/)
+│   ├── (marketing)/        # Landing page (/), /terms, /privacy (shared layout with header + footer)
 │   ├── (auth)/             # /login, /register (shared layout with logo)
 │   ├── auth/               # Auth callbacks (/auth/callback, /auth/confirm)
 │   ├── driver/             # Driver portal (/driver/*)
@@ -122,14 +122,15 @@ VAPID_PRIVATE_KEY=your-vapid-private-key
 ```
 
 ### Stripe Environment Setup
-- Stripe uses **Sandbox** mode (rebranded from "test mode") — sandbox keys are different from old test mode keys
-- Keys must come from the Stripe Dashboard with **Sandbox** toggle enabled
-- Connect must be enabled in Sandbox mode: Dashboard → Settings → Connect (Marketplace model)
-- **Webhook** configured in Sandbox → Developers → Webhooks for `https://cleanbag.io/api/webhooks/stripe`
+- **Production is LIVE** — Vercel Production env vars use `sk_live_` / `pk_live_` keys (real payments)
+- **Local dev uses Sandbox** — `.env.local` keeps sandbox keys (`sk_test_` / `pk_test_`)
+- **Vercel Preview uses Sandbox** — Preview scope keeps sandbox keys
+- Connect enabled as Marketplace model: Dashboard → Settings → Connect
+- **Live webhook** configured in Stripe Dashboard (Sandbox OFF) → Developers → Webhooks for `https://cleanbag.io/api/webhooks/stripe`
   - Events: `payment_intent.succeeded`, `account.updated`
-  - The webhook signing secret (`whsec_...`) is specific to each endpoint (dashboard vs CLI)
+  - The webhook signing secret (`whsec_...`) is specific to each endpoint (live vs sandbox vs CLI)
 - **Local dev** uses a different webhook secret from `stripe listen --forward-to localhost:3000/api/webhooks/stripe`
-- All three Stripe env vars (`STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`) are set in both `.env.local` and Vercel (Production + Preview scopes)
+- All three Stripe env vars (`STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`) are set in `.env.local` (sandbox) and Vercel Production (live) + Preview (sandbox)
 
 ### Google Maps Environment Setup
 - Requires a Google Cloud project with **Maps JavaScript API** + **Geocoding API** enabled
@@ -152,6 +153,9 @@ VAPID_PRIVATE_KEY=your-vapid-private-key
 ### Supabase Auth URL Config
 - **Site URL**: `https://cleanbag.io`
 - **Redirect URLs**: `http://localhost:3000/**`, `https://cleanbag.io/**`, `https://*.vercel.app/**`
+- **Email confirmation**: Enabled in production (users must verify email to activate account)
+- **Custom SMTP**: Resend (`smtp.resend.com:465`, sender: `noreply@cleanbag.io`)
+- **Supabase plan**: Pro ($25/mo) — daily automated backups + point-in-time recovery
 
 ## Database Setup
 Run these SQL files in Supabase SQL Editor (in order):
@@ -415,6 +419,14 @@ Brand colors available as Tailwind classes:
 - [x] Call + WhatsApp contact buttons on company dashboard, drivers page, and compliance table
 - [x] Green compliance colors — badge `success` variant split from `completed` (green vs pink), green banners on driver dashboard/history and company dashboard
 - [x] E2E Section 16: Contact Buttons & Compliance Colors (9 tests)
+- [x] Terms of Service page (`/terms`) — full ToS for Antonis D. Demetriou Enterprises Ltd (HE364859)
+- [x] Privacy Policy page (`/privacy`) — GDPR-compliant, data processors, rights, retention policy
+- [x] Shared marketing layout (`(marketing)/layout.tsx`) — header + footer with legal links
+- [x] Registration consent checkbox — required agreement to Terms + Privacy before account creation
+- [x] Stripe switched from Sandbox to Live (production processes real payments)
+- [x] Supabase upgraded to Pro (daily backups + point-in-time recovery)
+- [x] Email auth via Resend SMTP (`noreply@cleanbag.io`), email confirmation enabled
+- [x] Production DB cleaned for pilot launch
 - [ ] Facility dashboard auto-refresh — Supabase Realtime subscriptions
 - [ ] UI polish across all portals
 
@@ -518,8 +530,10 @@ User-facing text uses specific terms that differ from internal code identifiers:
 - Internal code (routes like `/facility/*`, `/agency/*`, DB fields like `facility_id`, `agency_id`, type names like `Facility`, `Agency`) should NOT be renamed
 
 ## Notes
+- **Pilot launch (Feb 2026)**: Stripe Live, Resend email, Supabase Pro, legal pages, clean production DB
 - Next.js 16 uses `proxy.ts` instead of `middleware.ts`
 - Tailwind v4 uses CSS-based config in `globals.css` (@theme directive)
 - Supabase key is named `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY` (new convention)
 - Disable "Confirm email" in Supabase Auth settings for local development to avoid rate limits
 - The `logo-text.svg` uses Avenir font which may not render on all systems; prefer `logo.svg` + CSS text
+- **Legal entity**: Antonis D. Demetriou Enterprises Ltd (HE364859), Sapfous 7, Aglantzia 1070, Nicosia, Cyprus

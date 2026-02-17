@@ -124,6 +124,37 @@ export default function RegisterPage() {
           </Select>
         </div>
 
+        <div className="flex items-start gap-2">
+          <input
+            type="checkbox"
+            id="terms"
+            name="terms"
+            required
+            disabled={isPending}
+            className="mt-1 h-4 w-4 rounded border-gray-300 text-brand-pink focus:ring-brand-pink"
+          />
+          <label htmlFor="terms" className="text-sm text-gray-600">
+            I agree to the{" "}
+            <a
+              href="/terms"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-brand-pink hover:text-brand-pink-dark"
+            >
+              Terms of Service
+            </a>{" "}
+            and{" "}
+            <a
+              href="/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-brand-pink hover:text-brand-pink-dark"
+            >
+              Privacy Policy
+            </a>
+          </label>
+        </div>
+
         {error && <InputError>{error}</InputError>}
 
         <Button type="submit" fullWidth disabled={isPending}>

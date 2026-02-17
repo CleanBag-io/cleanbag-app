@@ -30,6 +30,13 @@
 - ~~Add `ChangePasswordForm` to company settings page~~
 - Shipped as part of company settings page (`/agency/settings`)
 
+### Automated Data Deletion on Account Closure
+- When a user requests account deletion (via support@cleanbag.io), admin manually deletes now
+- Automate: delete personal data within 30 days of account closure request
+- Retain order/transaction records for 6 years (Cyprus tax compliance)
+- Could use a Supabase Edge Function on a schedule to process pending deletions
+- **Why deferred:** Manual deletion covers pilot scale. Automation needed before wider launch per GDPR commitment in Privacy Policy.
+
 ### Admin Change Password
 - Add `ChangePasswordForm` to an admin settings page
 - The shared component already exists — just needs a page to host it

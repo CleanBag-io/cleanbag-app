@@ -51,7 +51,7 @@ export default async function DriverDashboardPage() {
       <Card
         className={`p-6 ${
           driver?.compliance_status === "compliant"
-            ? "bg-brand-pink"
+            ? "bg-green-600"
             : driver?.compliance_status === "warning"
             ? "bg-amber-500"
             : "bg-red-500"

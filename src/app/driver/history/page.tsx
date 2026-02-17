@@ -105,7 +105,7 @@ export default async function HistoryPage() {
               <div
                 className={`h-full transition-all ${
                   driver?.compliance_status === "compliant"
-                    ? "bg-brand-pink"
+                    ? "bg-green-500"
                     : driver?.compliance_status === "warning"
                     ? "bg-amber-500"
                     : "bg-red-500"

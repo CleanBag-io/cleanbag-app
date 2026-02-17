@@ -26,7 +26,8 @@ const Badge = forwardRef<HTMLSpanElement, BadgeProps>(
           "inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap",
 
           // Variants
-          (variant === "success" || variant === "completed") &&
+          variant === "success" && "bg-green-100 text-green-700",
+          variant === "completed" &&
             "bg-brand-pink-light text-brand-pink-dark",
           (variant === "warning" || variant === "pending") &&
             "bg-amber-100 text-amber-700",

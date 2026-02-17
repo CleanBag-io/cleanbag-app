@@ -1844,3 +1844,227 @@ test.describe.serial("15. PWA & Notifications", () => {
     expect(true).toBe(true);
   });
 });
+
+// ────────────────────────────────────────────────────────────────
+// SECTION 16: Contact Buttons & Compliance Colors
+// Tests phone/WhatsApp icons on company pages and green compliance
+// badge/banner colors.
+// ────────────────────────────────────────────────────────────────
+
+test.describe.serial("16. Contact Buttons & Compliance Colors", () => {
+  const DRIVER_PHONE = "+35799123456";
+
+  test("16a. Setup: set driver phone, associate with company, set compliant", async ({ page }) => {
+    // Ensure driver is onboarded
+    await login(page, ACCOUNTS.driver.email, TEST_PASSWORD);
+    await page.goto("/driver/dashboard");
+    await page.waitForLoadState("networkidle");
+    if (page.url().includes("/onboarding")) {
+      await page.click("text=Motorcycle");
+      await page.click("button:has-text('Continue')");
+      await page.click("text=Wolt");
+      await page.click("button:has-text('Continue')");
+      await page.selectOption("select#city", TEST_CITY);
+      await page.click("button:has-text('Complete Setup')");
+      await page.waitForURL(/\/driver\/dashboard/, { timeout: 15000 });
+    }
+
+    // Ensure company is onboarded
+    await page.context().clearCookies();
+    await login(page, ACCOUNTS.agency.email, TEST_PASSWORD);
+    await page.goto("/agency/dashboard");
+    await page.waitForLoadState("networkidle");
+    if (page.url().includes("/onboarding")) {
+      await page.fill("input#name", "Fast Deliveries Cyprus");
+      await page.click("button:has-text('Continue')");
+      await page.selectOption("select#city", TEST_CITY);
+      await page.click("button:has-text('Continue')");
+      await page.click("button:has-text('Complete Setup')");
+      await page.waitForURL(/\/agency\/dashboard/, { timeout: 15000 });
+    }
+
+    // --- DB-based setup (avoids fragile UI join/accept flow) ---
+
+    // Look up profiles
+    const { data: driverProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("role", "driver")
+      .ilike("full_name", "%E2E Driver%")
+      .single();
+    expect(driverProfile).not.toBeNull();
+
+    const { data: agencyProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("role", "agency")
+      .ilike("full_name", "%E2E Company%")
+      .single();
+    expect(agencyProfile).not.toBeNull();
+
+    // Get agency record
+    const { data: agency } = await supabaseAdmin
+      .from("agencies")
+      .select("id")
+      .eq("user_id", agencyProfile!.id)
+      .single();
+    expect(agency).not.toBeNull();
+
+    // Set phone number on driver profile
+    await supabaseAdmin
+      .from("profiles")
+      .update({ phone: DRIVER_PHONE })
+      .eq("id", driverProfile!.id);
+
+    // Associate driver with company + set compliant
+    await supabaseAdmin
+      .from("drivers")
+      .update({
+        agency_id: agency!.id,
+        compliance_status: "compliant",
+        last_cleaning_date: new Date().toISOString(),
+        total_cleanings: 5,
+      })
+      .eq("user_id", driverProfile!.id);
+
+    // Clean up any stale agency_requests
+    await supabaseAdmin
+      .from("agency_requests")
+      .delete()
+      .eq("driver_id", (await supabaseAdmin.from("drivers").select("id").eq("user_id", driverProfile!.id).single()).data!.id);
+
+    expect(true).toBe(true);
+  });
+
+  test("16b. Agency dashboard shows green compliance banner", async ({ page }) => {
+    await login(page, ACCOUNTS.agency.email, TEST_PASSWORD);
+    await page.goto("/agency/dashboard");
+    await page.waitForLoadState("networkidle");
+
+    // The fleet compliance banner should have green background
+    const banner = page.locator("div.bg-green-600").first();
+    await expect(banner).toBeVisible({ timeout: 10000 });
+    await expect(banner.locator("text=Fleet Compliance Rate")).toBeVisible();
+  });
+
+  test("16c. Agency dashboard 'Drivers Needing Attention' section renders", async ({ page }) => {
+    await login(page, ACCOUNTS.agency.email, TEST_PASSWORD);
+    await page.goto("/agency/dashboard");
+    await page.waitForLoadState("networkidle");
+
+    // With the driver set to "compliant", the Drivers Needing Attention list
+    // should show "All drivers are compliant"
+    await expect(
+      page.locator("text=All drivers are compliant")
+    ).toBeVisible({ timeout: 10000 });
+  });
+
+  test("16d. Agency drivers page shows Call and WhatsApp icons", async ({ page }) => {
+    await login(page, ACCOUNTS.agency.email, TEST_PASSWORD);
+    await page.goto("/agency/drivers");
+    await page.waitForLoadState("networkidle");
+
+    // Click My Drivers tab
+    await page.click("button:has-text('My Drivers')");
+    await page.waitForTimeout(500);
+
+    // Driver should be listed
+    await expect(
+      page.locator(`text=${ACCOUNTS.driver.name}`)
+    ).toBeVisible({ timeout: 5000 });
+
+    // Phone link (tel:) should be present
+    const phoneLink = page.locator(`a[href="tel:${DRIVER_PHONE}"]`);
+    await expect(phoneLink.first()).toBeVisible({ timeout: 5000 });
+
+    // WhatsApp link should be present (phone digits only)
+    const waLink = page.locator(`a[href="https://wa.me/35799123456"]`);
+    await expect(waLink.first()).toBeVisible({ timeout: 5000 });
+  });
+
+  test("16e. Agency compliance page shows Contact column with icons", async ({ page }) => {
+    await login(page, ACCOUNTS.agency.email, TEST_PASSWORD);
+    await page.goto("/agency/compliance");
+    await page.waitForLoadState("networkidle");
+
+    // Contact column header should exist
+    await expect(
+      page.locator("th:has-text('Contact')")
+    ).toBeVisible({ timeout: 10000 });
+
+    // Phone and WhatsApp links in the table
+    const phoneLink = page.locator(`td a[href="tel:${DRIVER_PHONE}"]`);
+    await expect(phoneLink.first()).toBeVisible({ timeout: 5000 });
+
+    const waLink = page.locator(`td a[href="https://wa.me/35799123456"]`);
+    await expect(waLink.first()).toBeVisible({ timeout: 5000 });
+  });
+
+  test("16f. Compliance badge renders green (not pink)", async ({ page }) => {
+    await login(page, ACCOUNTS.agency.email, TEST_PASSWORD);
+    await page.goto("/agency/compliance");
+    await page.waitForLoadState("networkidle");
+
+    // The "Compliant" badge should use green styling
+    const compliantBadge = page.locator("span:has-text('Compliant')").first();
+    await expect(compliantBadge).toBeVisible({ timeout: 10000 });
+    await expect(compliantBadge).toHaveClass(/bg-green-100/);
+    await expect(compliantBadge).toHaveClass(/text-green-700/);
+  });
+
+  test("16g. Driver dashboard shows green compliance card when compliant", async ({ page }) => {
+    await login(page, ACCOUNTS.driver.email, TEST_PASSWORD);
+    await page.goto("/driver/dashboard");
+    await page.waitForLoadState("networkidle");
+
+    // The compliance card should have green-600 background
+    const complianceCard = page.locator("div.bg-green-600").first();
+    await expect(complianceCard).toBeVisible({ timeout: 10000 });
+    await expect(complianceCard.locator("text=Compliant")).toBeVisible();
+  });
+
+  test("16h. Driver history shows green progress bar when compliant", async ({ page }) => {
+    await login(page, ACCOUNTS.driver.email, TEST_PASSWORD);
+    await page.goto("/driver/history");
+    await page.waitForLoadState("networkidle");
+
+    // The progress bar should have green-500 background
+    const progressBar = page.locator("div.bg-green-500");
+    await expect(progressBar).toBeVisible({ timeout: 10000 });
+
+    // The compliance badge should be green
+    const compliantBadge = page.locator("span:has-text('Compliant')").first();
+    await expect(compliantBadge).toBeVisible();
+    await expect(compliantBadge).toHaveClass(/bg-green-100/);
+  });
+
+  test("16i. Cleanup: remove association, reset driver state", async () => {
+    const { data: driverProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("role", "driver")
+      .ilike("full_name", "%E2E Driver%")
+      .single();
+
+    if (driverProfile) {
+      // Reset phone
+      await supabaseAdmin
+        .from("profiles")
+        .update({ phone: null })
+        .eq("id", driverProfile.id);
+
+      // Reset compliance
+      await supabaseAdmin
+        .from("drivers")
+        .update({
+          agency_id: null,
+          compliance_status: "overdue",
+          last_cleaning_date: null,
+          total_cleanings: 0,
+        })
+        .eq("user_id", driverProfile.id);
+    }
+
+    expect(true).toBe(true);
+  });
+});

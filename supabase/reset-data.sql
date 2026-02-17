@@ -10,11 +10,17 @@
 -- Delete transactions first (references orders)
 DELETE FROM transactions;
 
+-- Delete push subscriptions (references auth.users)
+DELETE FROM push_subscriptions;
+
 -- Delete notifications (references profiles)
 DELETE FROM notifications;
 
 -- Delete orders (references drivers and facilities)
 DELETE FROM orders;
+
+-- Delete agency requests (references drivers and agencies)
+DELETE FROM agency_requests;
 
 -- Delete drivers (references profiles)
 DELETE FROM drivers;

@@ -79,7 +79,6 @@ export async function upsertAgency(formData: FormData): Promise<ActionResult> {
       name,
       city,
       compliance_target: complianceTarget,
-      total_drivers: 0,
     });
 
     if (error) {

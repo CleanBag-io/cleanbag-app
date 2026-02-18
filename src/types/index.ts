@@ -54,7 +54,6 @@ export interface Agency {
   user_id: string;
   name: string;
   city: City;
-  total_drivers: number;
   compliance_target: number;
   created_at: string;
 }

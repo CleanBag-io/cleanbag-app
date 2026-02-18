@@ -65,7 +65,6 @@ CREATE TABLE IF NOT EXISTS public.agencies (
   user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL UNIQUE,
   name TEXT NOT NULL,
   city TEXT NOT NULL CHECK (city IN ('Nicosia', 'Limassol', 'Larnaca', 'Paphos', 'Famagusta')),
-  total_drivers INTEGER NOT NULL DEFAULT 0,
   compliance_target DECIMAL(3, 2) NOT NULL DEFAULT 0.80,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

@@ -100,7 +100,8 @@ supabase/
 │   ├── 001-sprint5-pricing.sql  # Sprint 5: pricing + transactions policy
 │   ├── 002-sprint6-agency-requests.sql  # Sprint 6: agency_requests table + RLS
 │   ├── 003-facility-rating-trigger.sql  # Facility rating aggregation trigger
-│   └── 004-notifications-push.sql  # Sprint 7: Realtime for notifications + push_subscriptions table
+│   ├── 004-notifications-push.sql  # Sprint 7: Realtime for notifications + push_subscriptions table
+│   └── 005-drop-agencies-total-drivers.sql  # Drop unused total_drivers column
 ├── seed-test-data.sql      # Sample data for testing (edit UUIDs first)
 └── reset-data.sql          # Wipe ALL data including auth users
 ```
@@ -165,6 +166,7 @@ Run these SQL files in Supabase SQL Editor (in order):
 4. `supabase/migrations/002-sprint6-agency-requests.sql` - Sprint 6: agency_requests table + cross-table RLS (uses profiles for role checks)
 5. `supabase/migrations/003-facility-rating-trigger.sql` - Auto-recalculates facility.rating on order rating changes
 6. `supabase/migrations/004-notifications-push.sql` - Enables Supabase Realtime for notifications + push_subscriptions table with RLS
+7. `supabase/migrations/005-drop-agencies-total-drivers.sql` - Drops unused `total_drivers` column from agencies (driver counts computed dynamically)
 
 **Tables**: profiles, drivers, facilities, agencies, orders, transactions, notifications, push_subscriptions
 

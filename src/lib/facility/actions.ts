@@ -233,13 +233,17 @@ export async function acceptOrder(orderId: string): Promise<ActionResult> {
   // Verify order belongs to this facility and is pending
   const { data: order } = await supabase
     .from("orders")
-    .select("status, driver_id, order_number")
+    .select("status, payment_status, driver_id, order_number")
     .eq("id", orderId)
     .eq("facility_id", facility.id)
     .single();
 
   if (!order) {
     return { error: "Order not found" };
+  }
+
+  if (order.payment_status !== "paid") {
+    return { error: "Payment has not been completed for this order" };
   }
 
   if (order.status !== "pending") {
@@ -305,13 +309,17 @@ export async function startOrder(orderId: string): Promise<ActionResult> {
   // Verify order belongs to this facility and is accepted
   const { data: order } = await supabase
     .from("orders")
-    .select("status, driver_id, order_number")
+    .select("status, payment_status, driver_id, order_number")
     .eq("id", orderId)
     .eq("facility_id", facility.id)
     .single();
 
   if (!order) {
     return { error: "Order not found" };
+  }
+
+  if (order.payment_status !== "paid") {
+    return { error: "Payment has not been completed for this order" };
   }
 
   if (order.status !== "accepted") {
@@ -377,13 +385,17 @@ export async function completeOrder(orderId: string): Promise<ActionResult> {
   // Verify order belongs to this facility and is in progress
   const { data: order } = await supabase
     .from("orders")
-    .select("status, driver_id, base_price, commission_amount, stripe_payment_intent_id, order_number")
+    .select("status, payment_status, driver_id, base_price, commission_amount, stripe_payment_intent_id, order_number")
     .eq("id", orderId)
     .eq("facility_id", facility.id)
     .single();
 
   if (!order) {
     return { error: "Order not found" };
+  }
+
+  if (order.payment_status !== "paid") {
+    return { error: "Payment has not been completed for this order" };
   }
 
   if (order.status !== "in_progress") {

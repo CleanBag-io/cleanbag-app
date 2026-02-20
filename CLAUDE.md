@@ -101,7 +101,8 @@ supabase/
 │   ├── 002-sprint6-agency-requests.sql  # Sprint 6: agency_requests table + RLS
 │   ├── 003-facility-rating-trigger.sql  # Facility rating aggregation trigger
 │   ├── 004-notifications-push.sql  # Sprint 7: Realtime for notifications + push_subscriptions table
-│   └── 005-drop-agencies-total-drivers.sql  # Drop unused total_drivers column
+│   ├── 005-drop-agencies-total-drivers.sql  # Drop unused total_drivers column
+│   └── 006-cancel-unpaid-orders.sql  # Cancel unpaid orders + refund test order + cleanup bogus data
 ├── seed-test-data.sql      # Sample data for testing (edit UUIDs first)
 └── reset-data.sql          # Wipe ALL data including auth users
 ```
@@ -167,6 +168,7 @@ Run these SQL files in Supabase SQL Editor (in order):
 5. `supabase/migrations/003-facility-rating-trigger.sql` - Auto-recalculates facility.rating on order rating changes
 6. `supabase/migrations/004-notifications-push.sql` - Enables Supabase Realtime for notifications + push_subscriptions table with RLS
 7. `supabase/migrations/005-drop-agencies-total-drivers.sql` - Drops unused `total_drivers` column from agencies (driver counts computed dynamically)
+8. `supabase/migrations/006-cancel-unpaid-orders.sql` - Cancels 4 unpaid orders + refunds 1 test order + deletes bogus transactions + resets inflated facility/driver stats
 
 **Tables**: profiles, drivers, facilities, agencies, orders, transactions, notifications, push_subscriptions
 
@@ -220,6 +222,7 @@ Brand colors available as Tailwind classes:
 - `fees`/`losses` controller params are incompatible with `stripe_dashboard: full` — only for Custom/Express accounts
 - Status checking returns `chargesEnabled`, `payoutsEnabled`, `requirements` (pending items) in addition to `detailsSubmitted`
 - Connected state requires all three: `detailsSubmitted` + `chargesEnabled` + `payoutsEnabled`
+- **Payment gate**: `acceptOrder()`, `startOrder()`, `completeOrder()` all check `payment_status === "paid"` before allowing the action — prevents facilities from processing unpaid orders
 - Transfers to facility on order completion via `completeOrder()`
 - Webhook at `/api/webhooks/stripe` handles `payment_intent.succeeded` and `account.updated`
 - Stripe client is `null` if `STRIPE_SECRET_KEY` is not set — code gracefully degrades
@@ -429,6 +432,9 @@ Brand colors available as Tailwind classes:
 - [x] Supabase upgraded to Pro (daily backups + point-in-time recovery)
 - [x] Email auth via Resend SMTP (`noreply@cleanbag.io`), email confirmation enabled
 - [x] Production DB cleaned for pilot launch
+- [x] Payment gate on facility actions — `acceptOrder`/`startOrder`/`completeOrder` check `payment_status === "paid"` before proceeding
+- [x] Stripe webhook redirect fix — `cleanbag.io` → `www.cleanbag.io` 307 redirect was preventing webhook delivery; fixed in Stripe Dashboard
+- [x] Migration 006: cancelled 4 unpaid orders, refunded 1 test order, cleaned up bogus transactions/stats
 - [ ] Facility dashboard auto-refresh — Supabase Realtime subscriptions
 - [ ] UI polish across all portals
 
@@ -438,6 +444,7 @@ Brand colors available as Tailwind classes:
 - **Google Maps API keys required**: Set `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` (client) and `GOOGLE_MAPS_SERVER_API_KEY` (server geocoding) in `.env.local` and Vercel. Without them, maps show emoji fallback and new facilities won't be geocoded. Run "Backfill Coordinates" from admin facilities page after setting keys.
 - **VAPID keys required for push**: Set `NEXT_PUBLIC_VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` in `.env.local` and Vercel. Without them, push notifications are silently skipped (in-app notifications still work).
 - **No facility rating on DELETE**: The `recalculate_facility_rating` trigger only fires on INSERT/UPDATE, not DELETE. If an order with a rating is deleted, the facility aggregate won't auto-recalculate. The cleanup in E2E test 13g handles this manually.
+- **Stripe webhook URL must not redirect**: The live webhook endpoint must be `https://cleanbag.io/api/webhooks/stripe` (not `www.cleanbag.io`). A 307 redirect causes Stripe to fail delivery. If the domain config changes, update the webhook URL in Stripe Dashboard → Developers → Webhooks.
 
 ### Future Sprints
 - User geolocation & distance sorting — browser Geolocation API for driver location on map, Haversine-based distance sort for facility list (see `docs/NICE-TO-HAVE.md`)

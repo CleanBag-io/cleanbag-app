@@ -150,8 +150,11 @@ export async function getFacility(
   return { data: facility };
 }
 
-// Create a new order (booking) — returns clientSecret for Stripe payment
-export async function createOrder(formData: FormData): Promise<ActionResult<Order & { clientSecret?: string }>> {
+// Initiate payment — creates Stripe PaymentIntent without inserting an order
+// The order is only created after payment succeeds (via confirmOrder or webhook)
+export async function initiatePayment(
+  formData: FormData
+): Promise<ActionResult<{ clientSecret: string; paymentIntentId: string } | Order>> {
   const supabase = await createClient();
 
   const {
@@ -196,63 +199,162 @@ export async function createOrder(formData: FormData): Promise<ActionResult<Orde
   const commissionAmount = Math.round(basePrice * commissionRate * 100) / 100;
   const totalPrice = basePrice;
 
-  const { data: order, error } = await supabase
+  // No Stripe configured (local dev) — create order directly
+  if (!stripe) {
+    const { data: order, error } = await supabase
+      .from("orders")
+      .insert({
+        driver_id: driver.id,
+        facility_id: facilityId,
+        service_type: "standard",
+        base_price: basePrice,
+        commission_amount: commissionAmount,
+        total_price: totalPrice,
+        status: "pending",
+        payment_status: "pending",
+      })
+      .select()
+      .single();
+
+    if (error) {
+      return { error: error.message };
+    }
+
+    await createNotification({
+      userId: facility.user_id,
+      title: "New Order",
+      message: `A driver has placed a new cleaning order #${order.order_number}`,
+      type: "order",
+      data: { url: "/facility/orders" },
+    });
+
+    revalidatePath("/driver/orders", "page");
+    return { data: order };
+  }
+
+  // Create Stripe PaymentIntent with order details in metadata — no order yet
+  try {
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(totalPrice * 100), // cents
+      currency: "eur",
+      metadata: {
+        driver_id: driver.id,
+        facility_id: facilityId,
+        service_type: "standard",
+        base_price: String(basePrice),
+        commission_amount: String(commissionAmount),
+        total_price: String(totalPrice),
+        facility_user_id: facility.user_id,
+        facility_name: facility.name,
+      },
+    });
+
+    return {
+      data: {
+        clientSecret: paymentIntent.client_secret!,
+        paymentIntentId: paymentIntent.id,
+      },
+    };
+  } catch (err) {
+    console.error("Stripe PaymentIntent creation failed:", err);
+    return { error: "Payment setup failed. Please try again." };
+  }
+}
+
+// Confirm order after payment succeeds — creates the order from PaymentIntent metadata
+export async function confirmOrder(
+  paymentIntentId: string
+): Promise<ActionResult<Order>> {
+  if (!stripe) {
+    return { error: "Stripe not configured" };
+  }
+
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  // Retrieve the PaymentIntent and verify it succeeded
+  let paymentIntent;
+  try {
+    paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+  } catch {
+    return { error: "Payment not found" };
+  }
+
+  if (paymentIntent.status !== "succeeded") {
+    return { error: "Payment has not been completed" };
+  }
+
+  const meta = paymentIntent.metadata;
+  if (!meta.driver_id || !meta.facility_id) {
+    return { error: "Invalid payment metadata" };
+  }
+
+  // Verify the authenticated user owns this driver record
+  const { data: driver } = await supabase
+    .from("drivers")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("id", meta.driver_id)
+    .single();
+
+  if (!driver) {
+    return { error: "Unauthorized" };
+  }
+
+  // Idempotency: check if order already exists for this PaymentIntent
+  const serviceClient = createServiceRoleClient();
+  const { data: existingOrder } = await serviceClient
+    .from("orders")
+    .select("*")
+    .eq("stripe_payment_intent_id", paymentIntentId)
+    .maybeSingle();
+
+  if (existingOrder) {
+    return { data: existingOrder };
+  }
+
+  // Insert the order with payment already confirmed
+  const { data: order, error } = await serviceClient
     .from("orders")
     .insert({
-      driver_id: driver.id,
-      facility_id: facilityId,
-      service_type: "standard",
-      base_price: basePrice,
-      commission_amount: commissionAmount,
-      total_price: totalPrice,
+      driver_id: meta.driver_id,
+      facility_id: meta.facility_id,
+      service_type: meta.service_type || "standard",
+      base_price: parseFloat(meta.base_price),
+      commission_amount: parseFloat(meta.commission_amount),
+      total_price: parseFloat(meta.total_price),
       status: "pending",
-      payment_status: "pending",
+      payment_status: "paid",
+      stripe_payment_intent_id: paymentIntentId,
     })
     .select()
     .single();
 
   if (error) {
-    return { error: error.message };
+    console.error("confirmOrder: failed to insert order:", error);
+    return { error: "Failed to create order. Please contact support." };
   }
 
-  // Create Stripe PaymentIntent for upfront payment
-  let clientSecret: string | undefined;
-  if (stripe) {
-    try {
-      const paymentIntent = await stripe.paymentIntents.create({
-        amount: Math.round(totalPrice * 100), // cents
-        currency: "eur",
-        metadata: {
-          order_id: order.id,
-          facility_id: facilityId,
-        },
-        transfer_group: order.id,
-      });
-
-      clientSecret = paymentIntent.client_secret ?? undefined;
-
-      // Save PaymentIntent ID on the order
-      await supabase
-        .from("orders")
-        .update({ stripe_payment_intent_id: paymentIntent.id })
-        .eq("id", order.id);
-    } catch (err) {
-      console.error("Stripe PaymentIntent creation failed:", err);
-      // Order is created but payment failed — return order without clientSecret
-    }
+  // Notify the facility
+  if (meta.facility_user_id) {
+    await createNotification({
+      userId: meta.facility_user_id,
+      title: "New Order",
+      message: `A driver has placed a new cleaning order #${order.order_number}`,
+      type: "order",
+      data: { url: "/facility/orders" },
+    });
   }
-
-  // Notify the facility about the new order
-  await createNotification({
-    userId: facility.user_id,
-    title: "New Order",
-    message: `A driver has placed a new cleaning order #${order.order_number}`,
-    type: "order",
-    data: { url: "/facility/orders" },
-  });
 
   revalidatePath("/driver/orders", "page");
-  return { data: { ...order, clientSecret } };
+  return { data: order };
 }
 
 // Get driver's orders

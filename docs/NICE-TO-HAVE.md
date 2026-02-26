@@ -120,7 +120,7 @@
 
 ### Multi-Service Support (Hardcoded)
 - Add more services to `SERVICE_TYPES` in constants (e.g., "Clean Delivery Car" at €15)
-- Service picker in booking form, dynamic pricing in `createOrder()`, DB constraint migration
+- Service picker in booking form, dynamic pricing in `initiatePayment()`, DB constraint migration
 - All cleaning facilities offer the same menu — no per-facility customization yet
 - **Plan:** [`docs/MULTI-SERVICE.md`](MULTI-SERVICE.md)
 - **Effort:** Small-Medium (5 files, no schema redesign)

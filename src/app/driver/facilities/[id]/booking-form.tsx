@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { InputError } from "@/components/ui/input";
 import { StripeProvider } from "@/components/ui/stripe-provider";
 import { PaymentForm } from "@/components/ui/payment-form";
-import { createOrder } from "@/lib/driver/actions";
+import { initiatePayment, confirmOrder } from "@/lib/driver/actions";
 import { formatCurrency } from "@/lib/utils";
 import { PRICING, SERVICE_TYPES } from "@/config/constants";
 
@@ -20,7 +20,7 @@ export function BookingForm({ facilityId }: BookingFormProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
-  const [orderId, setOrderId] = useState<string | null>(null);
+  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
 
   const service = SERVICE_TYPES.standard;
 
@@ -31,7 +31,7 @@ export function BookingForm({ facilityId }: BookingFormProps) {
     const formData = new FormData();
     formData.append("facility_id", facilityId);
 
-    const result = await createOrder(formData);
+    const result = await initiatePayment(formData);
 
     if (result.error) {
       setError(result.error);
@@ -39,21 +39,38 @@ export function BookingForm({ facilityId }: BookingFormProps) {
       return;
     }
 
-    if (result.data?.clientSecret) {
+    if (result.data && "clientSecret" in result.data) {
+      // Stripe flow — show payment form (no order created yet)
       setClientSecret(result.data.clientSecret);
-      setOrderId(result.data.id);
+      setPaymentIntentId(result.data.paymentIntentId);
       setStep("payment");
-    } else if (result.data) {
-      // No Stripe configured — redirect directly
+    } else if (result.data && "id" in result.data) {
+      // No Stripe configured — order created directly
       router.push(`/driver/orders/${result.data.id}`);
     }
 
     setLoading(false);
   };
 
-  const handlePaymentSuccess = () => {
-    if (orderId) {
-      router.push(`/driver/orders/${orderId}`);
+  const handlePaymentSuccess = async () => {
+    if (!paymentIntentId) {
+      router.push("/driver/orders");
+      return;
+    }
+
+    // Payment succeeded — now create the order
+    const result = await confirmOrder(paymentIntentId);
+
+    if (result.error) {
+      // Payment went through but order creation failed — redirect to orders list
+      // The webhook safety net will create the order
+      console.error("confirmOrder failed:", result.error);
+      router.push("/driver/orders");
+      return;
+    }
+
+    if (result.data) {
+      router.push(`/driver/orders/${result.data.id}`);
     } else {
       router.push("/driver/orders");
     }
@@ -109,7 +126,7 @@ export function BookingForm({ facilityId }: BookingFormProps) {
             onClick={handleBookAndPay}
             className="mt-4"
           >
-            {loading ? "Creating order..." : `Book & Pay ${formatCurrency(PRICING.bagClean)}`}
+            {loading ? "Setting up payment..." : `Book & Pay ${formatCurrency(PRICING.bagClean)}`}
           </Button>
 
           <p className="text-xs text-gray-500 text-center">

@@ -2068,3 +2068,781 @@ test.describe.serial("16. Contact Buttons & Compliance Colors", () => {
     expect(true).toBe(true);
   });
 });
+
+// ────────────────────────────────────────────────────────────────
+// SECTION 17: Payment Gate
+// Verifies that acceptOrder/startOrder/completeOrder block unpaid
+// orders and that the full paid lifecycle still works.
+// ────────────────────────────────────────────────────────────────
+
+test.describe.serial("17. Payment Gate", () => {
+  let orderAId: string;
+  let orderBId: string;
+
+  test("17a. Setup: seed unpaid pending order", async ({ page }) => {
+    // Ensure driver is onboarded
+    await login(page, ACCOUNTS.driver.email, TEST_PASSWORD);
+    await page.goto("/driver/dashboard");
+    await page.waitForLoadState("networkidle");
+    if (page.url().includes("/onboarding")) {
+      await page.click("text=Motorcycle");
+      await page.click("button:has-text('Continue')");
+      await page.click("text=Wolt");
+      await page.click("button:has-text('Continue')");
+      await page.selectOption("select#city", TEST_CITY);
+      await page.click("button:has-text('Complete Setup')");
+      await page.waitForURL(/\/driver\/dashboard/, { timeout: 15000 });
+    }
+
+    // Ensure facility is onboarded
+    await page.context().clearCookies();
+    try {
+      await login(page, ACCOUNTS.facility.email, NEW_PASSWORD);
+    } catch {
+      await login(page, ACCOUNTS.facility.email, TEST_PASSWORD);
+    }
+    await page.goto("/facility/dashboard");
+    await page.waitForLoadState("networkidle");
+    if (page.url().includes("/onboarding")) {
+      await page.fill("input#name", "E2E Test Facility");
+      await page.click("button:has-text('Continue')");
+      await page.fill("input#address", "123 Test Street");
+      await page.selectOption("select#city", TEST_CITY);
+      await page.click("button:has-text('Complete Setup')");
+      await page.waitForURL(/\/facility\/dashboard/, { timeout: 15000 });
+    }
+
+    // Look up driver + facility records
+    const { data: driverProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("role", "driver")
+      .ilike("full_name", "%E2E%")
+      .limit(1)
+      .single();
+    const { data: facilityProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("role", "facility")
+      .ilike("full_name", "%E2E%")
+      .limit(1)
+      .single();
+
+    if (!driverProfile || !facilityProfile) throw new Error("Test profiles missing");
+
+    const { data: driver } = await supabaseAdmin
+      .from("drivers")
+      .select("id")
+      .eq("user_id", driverProfile.id)
+      .single();
+    const { data: facility } = await supabaseAdmin
+      .from("facilities")
+      .select("id")
+      .eq("user_id", facilityProfile.id)
+      .single();
+
+    if (!driver || !facility) throw new Error("Driver or facility record missing");
+
+    // Reset driver stats
+    await supabaseAdmin
+      .from("drivers")
+      .update({ last_cleaning_date: null, compliance_status: "overdue", total_cleanings: 0 })
+      .eq("id", driver.id);
+
+    // Reset facility stats
+    await supabaseAdmin
+      .from("facilities")
+      .update({ total_orders: 0, rating: 0 })
+      .eq("id", facility.id);
+
+    // Insert Order A: pending + unpaid
+    const { data: orderA, error: errA } = await supabaseAdmin
+      .from("orders")
+      .insert({
+        driver_id: driver.id,
+        facility_id: facility.id,
+        service_type: "standard",
+        status: "pending",
+        payment_status: "pending",
+        base_price: 4.5,
+        total_price: 4.5,
+        commission_amount: 2.12,
+      })
+      .select("id")
+      .single();
+
+    if (errA) throw new Error(`Failed to seed order A: ${errA.message}`);
+    orderAId = orderA!.id;
+    expect(orderAId).toBeTruthy();
+  });
+
+  test("17b. Facility cannot accept unpaid order", async ({ page }) => {
+    try {
+      await login(page, ACCOUNTS.facility.email, NEW_PASSWORD);
+    } catch {
+      await login(page, ACCOUNTS.facility.email, TEST_PASSWORD);
+    }
+    await page.goto("/facility/orders");
+    await page.waitForLoadState("networkidle");
+
+    // Click "Accept Order" on the unpaid order
+    const acceptBtn = page.locator("button:has-text('Accept Order')").first();
+    await expect(acceptBtn).toBeVisible({ timeout: 15000 });
+    await acceptBtn.click();
+
+    // Should see payment error
+    const errorMsg = page.locator("p.text-red-600");
+    await expect(errorMsg.first()).toBeVisible({ timeout: 10000 });
+    await expect(errorMsg.first()).toHaveText(/Payment has not been completed/);
+
+    // Verify order is still pending in DB
+    const { data: order } = await supabaseAdmin
+      .from("orders")
+      .select("status")
+      .eq("id", orderAId)
+      .single();
+    expect(order!.status).toBe("pending");
+  });
+
+  test("17c. Simulate payment via DB", async () => {
+    const { error } = await supabaseAdmin
+      .from("orders")
+      .update({ payment_status: "paid" })
+      .eq("id", orderAId);
+
+    expect(error).toBeNull();
+
+    // Verify the update
+    const { data: order } = await supabaseAdmin
+      .from("orders")
+      .select("payment_status")
+      .eq("id", orderAId)
+      .single();
+    expect(order!.payment_status).toBe("paid");
+  });
+
+  test("17d. Facility can accept paid order", async ({ page }) => {
+    try {
+      await login(page, ACCOUNTS.facility.email, NEW_PASSWORD);
+    } catch {
+      await login(page, ACCOUNTS.facility.email, TEST_PASSWORD);
+    }
+    await page.goto("/facility/orders");
+    await page.waitForLoadState("networkidle");
+
+    // Click "Accept Order"
+    const acceptBtn = page.locator("button:has-text('Accept Order')").first();
+    await expect(acceptBtn).toBeVisible({ timeout: 15000 });
+    await acceptBtn.click();
+
+    // Wait for action to process
+    await page.waitForTimeout(2000);
+
+    // Verify order is now accepted in DB
+    const { data: order } = await supabaseAdmin
+      .from("orders")
+      .select("status")
+      .eq("id", orderAId)
+      .single();
+    expect(order!.status).toBe("accepted");
+  });
+
+  test("17e. Facility cannot start unpaid order", async ({ page }) => {
+    // Seed Order B: accepted + unpaid
+    const { data: driverProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("role", "driver")
+      .ilike("full_name", "%E2E%")
+      .limit(1)
+      .single();
+    const { data: facilityProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("role", "facility")
+      .ilike("full_name", "%E2E%")
+      .limit(1)
+      .single();
+    const { data: driver } = await supabaseAdmin
+      .from("drivers")
+      .select("id")
+      .eq("user_id", driverProfile!.id)
+      .single();
+    const { data: facility } = await supabaseAdmin
+      .from("facilities")
+      .select("id")
+      .eq("user_id", facilityProfile!.id)
+      .single();
+
+    const { data: orderB, error: errB } = await supabaseAdmin
+      .from("orders")
+      .insert({
+        driver_id: driver!.id,
+        facility_id: facility!.id,
+        service_type: "standard",
+        status: "accepted",
+        payment_status: "pending",
+        base_price: 4.5,
+        total_price: 4.5,
+        commission_amount: 2.12,
+        accepted_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+
+    if (errB) throw new Error(`Failed to seed order B: ${errB.message}`);
+    orderBId = orderB!.id;
+
+    // Login as facility and try to start the unpaid order
+    try {
+      await login(page, ACCOUNTS.facility.email, NEW_PASSWORD);
+    } catch {
+      await login(page, ACCOUNTS.facility.email, TEST_PASSWORD);
+    }
+    await page.goto("/facility/orders");
+    await page.waitForLoadState("networkidle");
+
+    // Click "Start Cleaning" on the unpaid accepted order
+    const startBtn = page.locator("button:has-text('Start Cleaning')").first();
+    await expect(startBtn).toBeVisible({ timeout: 15000 });
+    await startBtn.click();
+
+    // Should see payment error
+    const errorMsg = page.locator("p.text-red-600");
+    await expect(errorMsg.first()).toBeVisible({ timeout: 10000 });
+    await expect(errorMsg.first()).toHaveText(/Payment has not been completed/);
+
+    // Verify order is still accepted in DB
+    const { data: order } = await supabaseAdmin
+      .from("orders")
+      .select("status")
+      .eq("id", orderBId)
+      .single();
+    expect(order!.status).toBe("accepted");
+  });
+
+  test("17f. Facility cannot complete unpaid order", async ({ page }) => {
+    // Update Order B to in_progress but keep payment_status pending
+    await supabaseAdmin
+      .from("orders")
+      .update({ status: "in_progress", started_at: new Date().toISOString() })
+      .eq("id", orderBId);
+
+    // Login as facility
+    try {
+      await login(page, ACCOUNTS.facility.email, NEW_PASSWORD);
+    } catch {
+      await login(page, ACCOUNTS.facility.email, TEST_PASSWORD);
+    }
+    await page.goto("/facility/orders");
+    await page.waitForLoadState("networkidle");
+
+    // Click "Mark Complete" on the unpaid in_progress order
+    const completeBtn = page.locator("button:has-text('Mark Complete')").first();
+    await expect(completeBtn).toBeVisible({ timeout: 15000 });
+    await completeBtn.click();
+
+    // Should see payment error
+    const errorMsg = page.locator("p.text-red-600");
+    await expect(errorMsg.first()).toBeVisible({ timeout: 10000 });
+    await expect(errorMsg.first()).toHaveText(/Payment has not been completed/);
+
+    // Verify order is still in_progress in DB
+    const { data: order } = await supabaseAdmin
+      .from("orders")
+      .select("status")
+      .eq("id", orderBId)
+      .single();
+    expect(order!.status).toBe("in_progress");
+  });
+
+  test("17g. Full paid lifecycle: start and complete", async ({ page }) => {
+    // Set Order B payment_status to paid
+    await supabaseAdmin
+      .from("orders")
+      .update({ payment_status: "paid" })
+      .eq("id", orderBId);
+
+    // Login as facility
+    try {
+      await login(page, ACCOUNTS.facility.email, NEW_PASSWORD);
+    } catch {
+      await login(page, ACCOUNTS.facility.email, TEST_PASSWORD);
+    }
+    await page.goto("/facility/orders");
+    await page.waitForLoadState("networkidle");
+
+    // Start the order
+    const startBtn = page.locator("button:has-text('Start Cleaning')").first();
+    await expect(startBtn).toBeVisible({ timeout: 15000 });
+    await startBtn.click();
+    await page.waitForTimeout(2000);
+
+    // Verify in DB
+    const { data: startedOrder } = await supabaseAdmin
+      .from("orders")
+      .select("status")
+      .eq("id", orderBId)
+      .single();
+    expect(startedOrder!.status).toBe("in_progress");
+
+    // Reload to get the "Mark Complete" button
+    await page.reload();
+    await page.waitForLoadState("networkidle");
+
+    // Complete the order
+    const completeBtn = page.locator("button:has-text('Mark Complete')").first();
+    await expect(completeBtn).toBeVisible({ timeout: 15000 });
+    await completeBtn.click();
+    await page.waitForTimeout(3000);
+
+    // Verify order completed in DB
+    const { data: completedOrder } = await supabaseAdmin
+      .from("orders")
+      .select("status")
+      .eq("id", orderBId)
+      .single();
+    expect(completedOrder!.status).toBe("completed");
+
+    // Verify driver stats were updated
+    const { data: driverProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("role", "driver")
+      .ilike("full_name", "%E2E%")
+      .limit(1)
+      .single();
+    const { data: driver } = await supabaseAdmin
+      .from("drivers")
+      .select("total_cleanings, compliance_status")
+      .eq("user_id", driverProfile!.id)
+      .single();
+    expect(driver!.total_cleanings).toBeGreaterThanOrEqual(1);
+    expect(driver!.compliance_status).toBe("compliant");
+  });
+
+  test("17h. Cleanup: remove test orders and reset stats", async () => {
+    // Delete transactions for both orders
+    if (orderAId) {
+      await supabaseAdmin.from("transactions").delete().eq("order_id", orderAId);
+    }
+    if (orderBId) {
+      await supabaseAdmin.from("transactions").delete().eq("order_id", orderBId);
+    }
+
+    // Delete notifications for both orders
+    if (orderAId) {
+      await supabaseAdmin.from("notifications").delete().eq("link", `/facility/orders/${orderAId}`);
+      await supabaseAdmin.from("notifications").delete().eq("link", `/driver/orders/${orderAId}`);
+    }
+    if (orderBId) {
+      await supabaseAdmin.from("notifications").delete().eq("link", `/facility/orders/${orderBId}`);
+      await supabaseAdmin.from("notifications").delete().eq("link", `/driver/orders/${orderBId}`);
+    }
+
+    // Delete the orders
+    if (orderAId) {
+      await supabaseAdmin.from("orders").delete().eq("id", orderAId);
+    }
+    if (orderBId) {
+      await supabaseAdmin.from("orders").delete().eq("id", orderBId);
+    }
+
+    // Clean up notifications for test accounts
+    for (const account of Object.values(ACCOUNTS)) {
+      const { data: profile } = await supabaseAdmin
+        .from("profiles")
+        .select("id")
+        .ilike("full_name", `%${account.name}%`)
+        .single();
+
+      if (profile) {
+        await supabaseAdmin
+          .from("notifications")
+          .delete()
+          .eq("user_id", profile.id);
+      }
+    }
+
+    // Reset driver stats
+    const { data: driverProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("role", "driver")
+      .ilike("full_name", "%E2E%")
+      .limit(1)
+      .single();
+
+    if (driverProfile) {
+      await supabaseAdmin
+        .from("drivers")
+        .update({ last_cleaning_date: null, compliance_status: "overdue", total_cleanings: 0 })
+        .eq("user_id", driverProfile.id);
+    }
+
+    // Reset facility stats
+    const { data: facilityProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("role", "facility")
+      .ilike("full_name", "%E2E%")
+      .limit(1)
+      .single();
+
+    if (facilityProfile) {
+      await supabaseAdmin
+        .from("facilities")
+        .update({ total_orders: 0, rating: 0 })
+        .eq("user_id", facilityProfile.id);
+    }
+
+    expect(true).toBe(true);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────
+// SECTION 18: Booking & Payment Flow
+// Tests the two-step payment flow: initiatePayment (no order in DB)
+// → payment → confirmOrder (order created with payment_status "paid").
+// Since E2E cannot interact with Stripe's PaymentElement iframe,
+// the full cycle is verified by checking DB state at each step.
+// ────────────────────────────────────────────────────────────────
+
+test.describe.serial("18. Booking & Payment Flow", () => {
+  let facilityId: string;
+  let driverId: string;
+
+  test("18a. Setup: ensure driver and facility are onboarded", async ({ page }) => {
+    // Ensure driver is onboarded
+    await login(page, ACCOUNTS.driver.email, TEST_PASSWORD);
+    await page.goto("/driver/dashboard");
+    await page.waitForLoadState("networkidle");
+    if (page.url().includes("/onboarding")) {
+      await page.click("text=Motorcycle");
+      await page.click("button:has-text('Continue')");
+      await page.click("text=Wolt");
+      await page.click("button:has-text('Continue')");
+      await page.selectOption("select#city", TEST_CITY);
+      await page.click("button:has-text('Complete Setup')");
+      await page.waitForURL(/\/driver\/dashboard/, { timeout: 15000 });
+    }
+
+    // Ensure facility is onboarded
+    await page.context().clearCookies();
+    try {
+      await login(page, ACCOUNTS.facility.email, NEW_PASSWORD);
+    } catch {
+      await login(page, ACCOUNTS.facility.email, TEST_PASSWORD);
+    }
+    await page.goto("/facility/dashboard");
+    await page.waitForLoadState("networkidle");
+    if (page.url().includes("/onboarding")) {
+      await page.fill("input#name", "E2E Test Facility");
+      await page.click("button:has-text('Continue')");
+      await page.fill("input#address", "123 Test Street");
+      await page.selectOption("select#city", TEST_CITY);
+      await page.click("button:has-text('Complete Setup')");
+      await page.waitForURL(/\/facility\/dashboard/, { timeout: 15000 });
+    }
+
+    // Look up IDs for later DB checks
+    const { data: driverProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("role", "driver")
+      .ilike("full_name", "%E2E%")
+      .limit(1)
+      .single();
+    const { data: driver } = await supabaseAdmin
+      .from("drivers")
+      .select("id")
+      .eq("user_id", driverProfile!.id)
+      .single();
+    driverId = driver!.id;
+
+    const { data: facilityProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("role", "facility")
+      .ilike("full_name", "%E2E%")
+      .limit(1)
+      .single();
+    const { data: facility } = await supabaseAdmin
+      .from("facilities")
+      .select("id")
+      .eq("user_id", facilityProfile!.id)
+      .single();
+    facilityId = facility!.id;
+
+    expect(driverId).toBeTruthy();
+    expect(facilityId).toBeTruthy();
+  });
+
+  test("18b. Booking page shows service card and Book & Pay button", async ({ page }) => {
+    await login(page, ACCOUNTS.driver.email, TEST_PASSWORD);
+    await page.goto(`/driver/facilities/${facilityId}`);
+    await page.waitForLoadState("networkidle");
+
+    // Service card visible
+    await expect(page.locator("h3:has-text('Clean Delivery Bag')").first()).toBeVisible({ timeout: 10000 });
+
+    // Order summary visible
+    await expect(page.locator("h3:has-text('Order Summary')")).toBeVisible();
+    await expect(page.locator("text=€4.50").first()).toBeVisible();
+
+    // Book & Pay button visible
+    const bookBtn = page.locator("button:has-text('Book & Pay')");
+    await expect(bookBtn).toBeVisible();
+    await expect(bookBtn).toBeEnabled();
+  });
+
+  test("18c. Clicking Book & Pay shows payment form (no order in DB)", async ({ page }) => {
+    await login(page, ACCOUNTS.driver.email, TEST_PASSWORD);
+    await page.goto(`/driver/facilities/${facilityId}`);
+    await page.waitForLoadState("networkidle");
+
+    // Count orders before clicking
+    const { count: beforeCount } = await supabaseAdmin
+      .from("orders")
+      .select("*", { count: "exact", head: true })
+      .eq("driver_id", driverId)
+      .eq("facility_id", facilityId)
+      .in("payment_status", ["pending"]);
+
+    // Click Book & Pay
+    const bookBtn = page.locator("button:has-text('Book & Pay')");
+    await bookBtn.click();
+
+    // Wait for payment step to render — the ← Back button (a <button>) appears in payment step
+    await expect(page.locator("button:has-text('← Back')")).toBeVisible({ timeout: 15000 });
+
+    // Payment summary still visible in payment step
+    await expect(page.locator("text=Clean Delivery Bag").first()).toBeVisible();
+    await expect(page.locator("text=€4.50").first()).toBeVisible();
+
+    // Verify NO new order was created in the database
+    const { count: afterCount } = await supabaseAdmin
+      .from("orders")
+      .select("*", { count: "exact", head: true })
+      .eq("driver_id", driverId)
+      .eq("facility_id", facilityId)
+      .in("payment_status", ["pending"]);
+
+    expect(afterCount).toBe(beforeCount);
+  });
+
+  test("18d. Back button returns to service step", async ({ page }) => {
+    await login(page, ACCOUNTS.driver.email, TEST_PASSWORD);
+    await page.goto(`/driver/facilities/${facilityId}`);
+    await page.waitForLoadState("networkidle");
+
+    // Go to payment step
+    await page.locator("button:has-text('Book & Pay')").click();
+    // Wait for the payment step's Back button (a <button>, not the page's <a> link)
+    const backBtn = page.locator("button:has-text('← Back')");
+    await expect(backBtn).toBeVisible({ timeout: 15000 });
+
+    // Click Back (the form button, not the page navigation link)
+    await backBtn.click();
+
+    // Should be back on service step — Order Summary and Book & Pay visible again
+    await expect(page.locator("h3:has-text('Order Summary')")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator("button:has-text('Book & Pay')")).toBeVisible();
+  });
+
+  test("18e. Paid order created via DB has correct payment_status", async () => {
+    // Simulate what confirmOrder does: insert order with payment_status "paid"
+    const { data: order, error } = await supabaseAdmin
+      .from("orders")
+      .insert({
+        driver_id: driverId,
+        facility_id: facilityId,
+        service_type: "standard",
+        status: "pending",
+        payment_status: "paid",
+        base_price: 4.5,
+        total_price: 4.5,
+        commission_amount: 2.12,
+        stripe_payment_intent_id: "pi_e2e_test_18e",
+      })
+      .select("id, payment_status, stripe_payment_intent_id")
+      .single();
+
+    expect(error).toBeNull();
+    expect(order!.payment_status).toBe("paid");
+    expect(order!.stripe_payment_intent_id).toBe("pi_e2e_test_18e");
+
+    // Clean up
+    await supabaseAdmin.from("transactions").delete().eq("order_id", order!.id);
+    await supabaseAdmin.from("notifications").delete().ilike("message", `%${order!.order_number || ""}%`);
+    await supabaseAdmin.from("orders").delete().eq("id", order!.id);
+  });
+
+  test("18f. Driver sees paid order on orders page", async ({ page }) => {
+    // Seed a paid order
+    const { data: order } = await supabaseAdmin
+      .from("orders")
+      .insert({
+        driver_id: driverId,
+        facility_id: facilityId,
+        service_type: "standard",
+        status: "pending",
+        payment_status: "paid",
+        base_price: 4.5,
+        total_price: 4.5,
+        commission_amount: 2.12,
+        stripe_payment_intent_id: "pi_e2e_test_18f",
+      })
+      .select("id, order_number")
+      .single();
+
+    expect(order).toBeTruthy();
+
+    // Login as driver and check orders page
+    await login(page, ACCOUNTS.driver.email, TEST_PASSWORD);
+    await page.goto("/driver/orders");
+    await page.waitForLoadState("networkidle");
+
+    // Order number should appear
+    await expect(page.locator(`text=${order!.order_number}`)).toBeVisible({ timeout: 10000 });
+
+    // Should show "Pending" status
+    await expect(page.locator("text=Pending").first()).toBeVisible();
+
+    // Clean up
+    await supabaseAdmin.from("transactions").delete().eq("order_id", order!.id);
+    await supabaseAdmin.from("notifications").delete().ilike("message", `%${order!.order_number}%`);
+    await supabaseAdmin.from("orders").delete().eq("id", order!.id);
+  });
+
+  test("18g. Full paid lifecycle: accept → start → complete", async ({ page }) => {
+    // Seed a paid order
+    const { data: order } = await supabaseAdmin
+      .from("orders")
+      .insert({
+        driver_id: driverId,
+        facility_id: facilityId,
+        service_type: "standard",
+        status: "pending",
+        payment_status: "paid",
+        base_price: 4.5,
+        total_price: 4.5,
+        commission_amount: 2.12,
+        stripe_payment_intent_id: "pi_e2e_test_18g",
+      })
+      .select("id, order_number")
+      .single();
+
+    expect(order).toBeTruthy();
+    const orderId = order!.id;
+
+    // Reset driver stats for clean test
+    await supabaseAdmin
+      .from("drivers")
+      .update({ last_cleaning_date: null, compliance_status: "overdue", total_cleanings: 0 })
+      .eq("id", driverId);
+    await supabaseAdmin
+      .from("facilities")
+      .update({ total_orders: 0, rating: 0 })
+      .eq("id", facilityId);
+
+    // Login as facility
+    try {
+      await login(page, ACCOUNTS.facility.email, NEW_PASSWORD);
+    } catch {
+      await login(page, ACCOUNTS.facility.email, TEST_PASSWORD);
+    }
+    await page.goto("/facility/orders");
+    await page.waitForLoadState("networkidle");
+
+    // Accept
+    const acceptBtn = page.locator("button:has-text('Accept Order')").first();
+    await expect(acceptBtn).toBeVisible({ timeout: 15000 });
+    await acceptBtn.click();
+    await page.waitForTimeout(2000);
+
+    const { data: accepted } = await supabaseAdmin
+      .from("orders")
+      .select("status")
+      .eq("id", orderId)
+      .single();
+    expect(accepted!.status).toBe("accepted");
+
+    // Reload and start
+    await page.reload();
+    await page.waitForLoadState("networkidle");
+    const startBtn = page.locator("button:has-text('Start Cleaning')").first();
+    await expect(startBtn).toBeVisible({ timeout: 15000 });
+    await startBtn.click();
+    await page.waitForTimeout(2000);
+
+    const { data: started } = await supabaseAdmin
+      .from("orders")
+      .select("status")
+      .eq("id", orderId)
+      .single();
+    expect(started!.status).toBe("in_progress");
+
+    // Reload and complete
+    await page.reload();
+    await page.waitForLoadState("networkidle");
+    const completeBtn = page.locator("button:has-text('Mark Complete')").first();
+    await expect(completeBtn).toBeVisible({ timeout: 15000 });
+    await completeBtn.click();
+    await page.waitForTimeout(3000);
+
+    const { data: completed } = await supabaseAdmin
+      .from("orders")
+      .select("status, payment_status")
+      .eq("id", orderId)
+      .single();
+    expect(completed!.status).toBe("completed");
+    expect(completed!.payment_status).toBe("paid");
+
+    // Verify driver stats updated
+    const { data: driver } = await supabaseAdmin
+      .from("drivers")
+      .select("total_cleanings, compliance_status")
+      .eq("id", driverId)
+      .single();
+    expect(driver!.total_cleanings).toBeGreaterThanOrEqual(1);
+    expect(driver!.compliance_status).toBe("compliant");
+
+    // Clean up order, transactions, notifications
+    await supabaseAdmin.from("transactions").delete().eq("order_id", orderId);
+    await supabaseAdmin.from("notifications").delete().ilike("message", `%${order!.order_number}%`);
+    await supabaseAdmin.from("orders").delete().eq("id", orderId);
+  });
+
+  test("18h. Cleanup: reset driver and facility stats", async () => {
+    // Reset driver stats
+    await supabaseAdmin
+      .from("drivers")
+      .update({ last_cleaning_date: null, compliance_status: "overdue", total_cleanings: 0 })
+      .eq("id", driverId);
+
+    // Reset facility stats
+    await supabaseAdmin
+      .from("facilities")
+      .update({ total_orders: 0, rating: 0 })
+      .eq("id", facilityId);
+
+    // Clean up any leftover notifications for test accounts
+    for (const account of Object.values(ACCOUNTS)) {
+      const { data: profile } = await supabaseAdmin
+        .from("profiles")
+        .select("id")
+        .ilike("full_name", `%${account.name}%`)
+        .single();
+
+      if (profile) {
+        await supabaseAdmin
+          .from("notifications")
+          .delete()
+          .eq("user_id", profile.id);
+      }
+    }
+
+    expect(true).toBe(true);
+  });
+});

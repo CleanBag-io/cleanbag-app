@@ -215,8 +215,9 @@ Brand colors available as Tailwind classes:
 ### Stripe / Payments
 - Single service model: "Clean Delivery Bag" at €4.50 (`PRICING.bagClean`)
 - Commission stored per facility (`commission_rate`); default 0.471 (CleanBag keeps €2.12)
-- Driver pays upfront at booking — `createOrder()` creates PaymentIntent, returns `clientSecret`
-- Booking form is two-step: service summary → PaymentElement (Stripe)
+- Driver pays upfront at booking — two-step flow: `initiatePayment()` creates Stripe PaymentIntent (no order in DB yet), returns `clientSecret`; after payment succeeds, `confirmOrder()` creates the order with `payment_status: "paid"`
+- Booking form is two-step: service summary → PaymentElement (Stripe) → order created on success
+- Webhook `payment_intent.succeeded` acts as safety net: creates order from PI metadata if `confirmOrder` didn't run (e.g., driver closed browser)
 - Stripe Connect for facilities (Marketplace model) — onboarding via `createConnectAccountLink()`
 - Account creation uses modern `controller` object (`stripe_dashboard: full`) with explicit `capabilities` and `country: "CY"` — do NOT use deprecated `type: "standard"` param
 - `fees`/`losses` controller params are incompatible with `stripe_dashboard: full` — only for Custom/Express accounts
@@ -256,7 +257,7 @@ Brand colors available as Tailwind classes:
 - **iOS Support**: `apple-mobile-web-app-capable` meta tag in layout.tsx `other` property. `apple-icon.png` via Next.js file convention auto-generates `<link rel="apple-touch-icon">`.
 - **In-App Notifications**: `createNotification()` uses service role to insert (caller is not the recipient). Bell dropdown shows real-time updates via Supabase Realtime channel filtered by `user_id`.
 - **Push Notifications**: `web-push` library with VAPID keys. `sendPushNotification()` is called fire-and-forget inside `createNotification()`. Auto-deletes expired subscriptions (410/404).
-- **Notification Triggers**: 8 server actions call `createNotification()` after successful mutations: createOrder, cancelOrder, acceptOrder, startOrder, completeOrder, sendInvitation, respondToRequest, respondToInvitation
+- **Notification Triggers**: 8 server actions call `createNotification()` after successful mutations: confirmOrder (+ webhook safety net), cancelOrder, acceptOrder, startOrder, completeOrder, sendInvitation, respondToRequest, respondToInvitation
 - **Push Permission**: Banner appears 3s after page load when `Notification.permission === "default"`. Subscribes via `pushManager.subscribe()` and saves to DB.
 
 ## Sprint Progress
@@ -287,7 +288,7 @@ Brand colors available as Tailwind classes:
 - [x] Order status tracking with progress visualization
 - [x] Compliance dashboard in history page
 - [x] Driver profile page with edit capability
-- [x] Driver server actions (getDriver, getFacilities, createOrder, etc.)
+- [x] Driver server actions (getDriver, getFacilities, initiatePayment, confirmOrder, etc.)
 
 ### Sprint 4: Facility Features ✅ COMPLETE
 - [x] Facility onboarding flow (name, address, city)
@@ -432,7 +433,8 @@ Brand colors available as Tailwind classes:
 - [x] Supabase upgraded to Pro (daily backups + point-in-time recovery)
 - [x] Email auth via Resend SMTP (`noreply@cleanbag.io`), email confirmation enabled
 - [x] Production DB cleaned for pilot launch
-- [x] Payment gate on facility actions — `acceptOrder`/`startOrder`/`completeOrder` check `payment_status === "paid"` before proceeding
+- [x] Payment gate on facility actions — `acceptOrder`/`startOrder`/`completeOrder` check `payment_status === "paid"` before proceeding (safety net — orders are now only created after payment succeeds)
+- [x] Payment flow fix: replaced `createOrder` (inserted order before payment) with `initiatePayment` + `confirmOrder` (order only created after Stripe payment succeeds); webhook acts as safety net for browser-close edge case
 - [x] Stripe webhook redirect fix — `cleanbag.io` → `www.cleanbag.io` 307 redirect was preventing webhook delivery; fixed in Stripe Dashboard
 - [x] Migration 006: cancelled 4 unpaid orders, refunded 1 test order, cleaned up bogus transactions/stats
 - [ ] Facility dashboard auto-refresh — Supabase Realtime subscriptions
@@ -460,7 +462,7 @@ pnpm dev                                    # Start dev server (http://localhost
 pnpm build                                  # Production build
 pnpm start                                  # Run production build
 pnpm lint                                   # Run ESLint
-npx playwright test e2e/sprint6.spec.ts     # Run E2E tests (94 tests, ~8 min)
+npx playwright test e2e/sprint6.spec.ts     # Run E2E tests (110 tests, ~10 min)
 npx playwright test e2e/sprint6.spec.ts -g "8. Admin"  # Run specific section
 npx playwright test e2e/sprint6.spec.ts -g "11\.|12\." # Run new feature tests only
 ```
@@ -472,7 +474,7 @@ npx playwright test e2e/sprint6.spec.ts -g "11\.|12\." # Run new feature tests o
 ## E2E Testing
 
 ### Overview
-94 Playwright E2E tests covering all features through Sprint 7 including PWA, notifications, server-action-triggered notification flows, contact buttons, and compliance colors. Tests run serially against the dev server using 4 temporary test accounts created via Supabase Admin API (plus 1 dynamically created by the admin create facility test).
+110 Playwright E2E tests covering all features through Sprint 7 including PWA, notifications, server-action-triggered notification flows, contact buttons, compliance colors, payment gate, and booking/payment flow. Tests run serially against the dev server using 4 temporary test accounts created via Supabase Admin API (plus 1 dynamically created by the admin create facility test).
 
 ### Architecture
 ```
@@ -480,7 +482,7 @@ e2e/
   helpers.ts          # supabaseAdmin, createTestUser(), login(), ACCOUNTS, TEST_CITY, ADMIN_CREATED_FACILITY_EMAIL
   global-setup.ts     # Creates 4 accounts before all tests
   global-teardown.ts  # Deletes accounts after all tests (including admin-created facility)
-  sprint6.spec.ts     # 94 tests in 16 serial sections
+  sprint6.spec.ts     # 110 tests in 18 serial sections
 playwright.config.ts  # Single worker, 60s timeout, auto-starts dev server
 ```
 
@@ -493,7 +495,7 @@ playwright.config.ts  # Single worker, 60s timeout, auto-starts dev server
 | admin | e2e-admin@test.com | E2E Admin |
 | facility (dynamic) | e2e-created-facility@test.com | Created by admin test, cleaned up in teardown |
 
-### Test Sections (94 tests)
+### Test Sections (110 tests)
 1. **Auth & Login** (5) — Login all roles + unauthenticated redirect
 2. **Driver Onboarding** (2) — Wizard + dashboard
 3. **Facility Onboarding** (1) — Wizard
@@ -510,6 +512,8 @@ playwright.config.ts  # Single worker, 60s timeout, auto-starts dev server
 14. **Google Maps Integration** (6) — No old placeholder, map or fallback on list/detail, Location section with Google Maps link, admin backfill button, geocoding on create
 15. **PWA & Notifications** (21) — Manifest valid, SW accessible, icon files, notification bell (driver + facility), bell dropdown, notification pages (all 4 roles), DB notification appears in bell via Realtime, mark all read, notifications page, order notification flow (seed order, facility accepts/starts/completes → driver gets notifications, bell badge count, notification click-through to order, view all notifications page), cleanup
 16. **Contact Buttons & Compliance Colors** (9) — Setup (phone, association, compliant state via DB), green compliance banner on agency dashboard, drivers needing attention section, Call + WhatsApp icons on drivers page, Contact column on compliance table, green badge verification, green driver dashboard card, green history progress bar, cleanup
+17. **Payment Gate** (8) — Seed unpaid order, facility cannot accept unpaid, simulate payment, accept paid, cannot start unpaid, cannot complete unpaid, full paid lifecycle (start + complete), cleanup
+18. **Booking & Payment Flow** (8) — Setup, booking page UI (service card, order summary, Book & Pay button), Book & Pay shows payment form (no order in DB), back button returns to service step, paid order has correct payment_status, driver sees paid order on orders page, full paid lifecycle (accept → start → complete), cleanup
 
 ### Prerequisites
 - `.env.local` with all Supabase credentials including `SUPABASE_SERVICE_ROLE_KEY`

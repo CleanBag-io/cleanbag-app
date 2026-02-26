@@ -17,7 +17,8 @@ Allow drivers to choose from multiple cleaning services when booking (e.g., "Cle
 
 - **One service**: "Clean Delivery Bag" at `€4.50`, defined in `SERVICE_TYPES.standard`
 - **Booking form** (`booking-form.tsx:25`): grabs `SERVICE_TYPES.standard` directly, no selection UI
-- **`createOrder()`** (`lib/driver/actions.ts:194-204`): hardcodes `PRICING.bagClean` and `service_type: "standard"`
+- **`initiatePayment()`** (`lib/driver/actions.ts`): hardcodes `PRICING.bagClean` and `service_type: "standard"` in the PaymentIntent metadata
+- **`confirmOrder()`** (`lib/driver/actions.ts`): reads pricing from PaymentIntent metadata when creating the order
 - **DB constraint** (`schema.sql:86`): `CHECK (service_type IN ('standard', 'express', 'deep'))` — legacy values from pre-Sprint 5
 - **`getServiceName()`** (`lib/utils.ts:76`): already handles multiple types via `SERVICE_TYPES` lookup + `LEGACY_SERVICE_NAMES` fallback
 - **Display pages**: 7 files use `getServiceName(order.service_type)` — these already work with any service type string
@@ -58,15 +59,14 @@ Replace the hardcoded `const service = SERVICE_TYPES.standard` with a selectable
 - Render all entries in `SERVICE_TYPES` as selectable cards (radio-style, highlight selected)
 - Default to `standard` (first item)
 - Track `selectedServiceType` in state
-- Pass `service_type` to `createOrder` via FormData
+- Pass `service_type` to `initiatePayment` via FormData
 - Update the "Book & Pay" button and summary to show the selected service's price
 
-### 3. `lib/driver/actions.ts` — `createOrder()`
+### 3. `lib/driver/actions.ts` — `initiatePayment()` + `confirmOrder()`
 
-- Read `service_type` from FormData (default: `"standard"`)
-- Look up price from `SERVICE_TYPES[serviceType].price` instead of hardcoding `PRICING.bagClean`
-- Pass the selected `service_type` to the DB insert
-- Stripe `PaymentIntent` amount uses the looked-up price
+- `initiatePayment()`: Read `service_type` from FormData (default: `"standard"`), look up price from `SERVICE_TYPES[serviceType].price`, create PaymentIntent with dynamic amount and `service_type` in metadata
+- `confirmOrder()`: Reads `service_type` and pricing from PaymentIntent metadata — no changes needed (already dynamic)
+- Webhook safety net: Also reads from PI metadata — no changes needed
 
 ### 4. DB migration — Update CHECK constraint
 
@@ -99,7 +99,7 @@ Already works — `getServiceName()` checks `SERVICE_TYPES` first, falls back to
 |------|--------|
 | `src/config/constants.ts` | Add new service type + pricing |
 | `src/app/driver/facilities/[id]/booking-form.tsx` | Service picker UI + pass selection to action |
-| `src/lib/driver/actions.ts` | Read `service_type` from FormData, dynamic pricing |
+| `src/lib/driver/actions.ts` | `initiatePayment()`: read `service_type` from FormData, dynamic pricing in PI metadata |
 | `supabase/migrations/005-*.sql` | Update or drop `service_type` CHECK constraint |
 | `e2e/sprint6.spec.ts` | Update/add booking tests |
 

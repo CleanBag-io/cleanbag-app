@@ -76,6 +76,7 @@ export async function getPlatformStats(): Promise<
   const { count: ordersToday } = await sb
     .from("orders")
     .select("id", { count: "exact", head: true })
+    .eq("payment_status", "paid")
     .gte("created_at", today.toISOString());
 
   return {

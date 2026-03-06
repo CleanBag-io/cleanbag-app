@@ -102,7 +102,8 @@ supabase/
 │   ├── 003-facility-rating-trigger.sql  # Facility rating aggregation trigger
 │   ├── 004-notifications-push.sql  # Sprint 7: Realtime for notifications + push_subscriptions table
 │   ├── 005-drop-agencies-total-drivers.sql  # Drop unused total_drivers column
-│   └── 006-cancel-unpaid-orders.sql  # Cancel unpaid orders + refund test order + cleanup bogus data
+│   ├── 006-cancel-unpaid-orders.sql  # Cancel unpaid orders + refund test order + cleanup bogus data
+│   └── 007-cleanup-test-data.sql    # Cancel orphan orders, delete duplicate company + misregistered facility, recalc stats
 ├── seed-test-data.sql      # Sample data for testing (edit UUIDs first)
 └── reset-data.sql          # Wipe ALL data including auth users
 ```
@@ -169,6 +170,7 @@ Run these SQL files in Supabase SQL Editor (in order):
 6. `supabase/migrations/004-notifications-push.sql` - Enables Supabase Realtime for notifications + push_subscriptions table with RLS
 7. `supabase/migrations/005-drop-agencies-total-drivers.sql` - Drops unused `total_drivers` column from agencies (driver counts computed dynamically)
 8. `supabase/migrations/006-cancel-unpaid-orders.sql` - Cancels 4 unpaid orders + refunds 1 test order + deletes bogus transactions + resets inflated facility/driver stats
+9. `supabase/migrations/007-cleanup-test-data.sql` - Cancels all orphan orders (pending/unpaid), deletes duplicate PROSOT company + Prosot facility (misregistered), recalculates facility stats
 
 **Tables**: profiles, drivers, facilities, agencies, orders, transactions, notifications, push_subscriptions
 
@@ -437,6 +439,8 @@ Brand colors available as Tailwind classes:
 - [x] Payment flow fix: replaced `createOrder` (inserted order before payment) with `initiatePayment` + `confirmOrder` (order only created after Stripe payment succeeds); webhook acts as safety net for browser-close edge case
 - [x] Stripe webhook redirect fix — `cleanbag.io` → `www.cleanbag.io` 307 redirect was preventing webhook delivery; fixed in Stripe Dashboard
 - [x] Migration 006: cancelled 4 unpaid orders, refunded 1 test order, cleaned up bogus transactions/stats
+- [x] Admin dashboard fix: "Orders Today" now filters by `payment_status = 'paid'` (was counting unpaid orphans)
+- [x] Migration 007: cancelled all orphan orders, deleted duplicate PROSOT company + Prosot facility (misregistered as facility), recalculated facility stats
 - [ ] Facility dashboard auto-refresh — Supabase Realtime subscriptions
 - [ ] UI polish across all portals
 

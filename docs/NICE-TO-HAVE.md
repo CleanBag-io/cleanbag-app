@@ -132,6 +132,15 @@
 - Depends on hardcoded multi-service support being in place first
 - **Why deferred:** Over-engineered for pilot. Hardcoded services cover initial needs.
 
+### Prepaid / Bulk Payment Support
+- Companies prepay for a batch of driver cleanings (e.g., 20 cleanings at €4.50 each)
+- System tracks prepaid credits per company, deducts on each cleaning
+- Drivers associated with a prepaid company skip the Stripe payment step at booking
+- Order is created with `payment_status: "prepaid"` and credits are decremented
+- Admin dashboard shows prepaid balance per company
+- **Current workaround:** Manual SQL migration to set `last_cleaning_date` and `total_cleanings` for prepaid drivers after they clean (see parent repo CLAUDE.md "Manual Prepaid Driver Compliance Updates")
+- **Why deferred:** Only one company (PROSOT) uses prepaid. Manual process works at pilot scale. Automate when more companies request it.
+
 ### Order Queue Management
 - Real-time order queue with estimated wait times
 - Drag-and-drop reordering

@@ -171,6 +171,7 @@ Run these SQL files in Supabase SQL Editor (in order):
 7. `supabase/migrations/005-drop-agencies-total-drivers.sql` - Drops unused `total_drivers` column from agencies (driver counts computed dynamically)
 8. `supabase/migrations/006-cancel-unpaid-orders.sql` - Cancels 4 unpaid orders + refunds 1 test order + deletes bogus transactions + resets inflated facility/driver stats
 9. `supabase/migrations/007-cleanup-test-data.sql` - Cancels all orphan orders (pending/unpaid), deletes duplicate PROSOT company + Prosot facility (misregistered), recalculates facility stats
+10. `supabase/migrations/008-prepaid-drivers-compliant-2026-03-17.sql` - Marks 9 prepaid PROSOT drivers as compliant (sets last_cleaning_date + increments total_cleanings; DB trigger auto-sets compliance_status)
 
 **Tables**: profiles, drivers, facilities, agencies, orders, transactions, notifications, push_subscriptions
 
@@ -441,6 +442,7 @@ Brand colors available as Tailwind classes:
 - [x] Migration 006: cancelled 4 unpaid orders, refunded 1 test order, cleaned up bogus transactions/stats
 - [x] Admin dashboard fix: "Orders Today" now filters by `payment_status = 'paid'` (was counting unpaid orphans)
 - [x] Migration 007: cancelled all orphan orders, deleted duplicate PROSOT company + Prosot facility (misregistered as facility), recalculated facility stats
+- [x] Migration 008: manual prepaid driver compliance — marked 9 prepaid PROSOT drivers as compliant (2026-03-17)
 - [ ] Facility dashboard auto-refresh — Supabase Realtime subscriptions
 - [ ] UI polish across all portals
 

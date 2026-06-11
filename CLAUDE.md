@@ -130,7 +130,7 @@ VAPID_PRIVATE_KEY=your-vapid-private-key
 - **Vercel Preview uses Sandbox** — Preview scope keeps sandbox keys
 - Connect enabled as Marketplace model: Dashboard → Settings → Connect
 - **Live webhook** configured in Stripe Dashboard (Sandbox OFF) → Developers → Webhooks for `https://cleanbag.io/api/webhooks/stripe`
-  - Events: `payment_intent.succeeded`, `account.updated`
+  - Events: `payment_intent.succeeded`, `account.updated`, `charge.refunded`
   - The webhook signing secret (`whsec_...`) is specific to each endpoint (live vs sandbox vs CLI)
 - **Local dev** uses a different webhook secret from `stripe listen --forward-to localhost:3000/api/webhooks/stripe`
 - All three Stripe env vars (`STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`) are set in `.env.local` (sandbox) and Vercel Production (live) + Preview (sandbox)
@@ -172,6 +172,9 @@ Run these SQL files in Supabase SQL Editor (in order):
 8. `supabase/migrations/006-cancel-unpaid-orders.sql` - Cancels 4 unpaid orders + refunds 1 test order + deletes bogus transactions + resets inflated facility/driver stats
 9. `supabase/migrations/007-cleanup-test-data.sql` - Cancels all orphan orders (pending/unpaid), deletes duplicate PROSOT company + Prosot facility (misregistered), recalculates facility stats
 10. `supabase/migrations/008-prepaid-drivers-compliant-2026-03-17.sql` - Marks 9 prepaid PROSOT drivers as compliant (sets last_cleaning_date + increments total_cleanings; DB trigger auto-sets compliance_status)
+11. `supabase/migrations/009-payment-integrity.sql` - Unique index on orders.stripe_payment_intent_id (one order per PI), atomic `complete_order()` function (service_role-only), pending-only partial unique index on agency_requests (fixes leave+rejoin)
+12. `supabase/migrations/010-pricing-4eur.sql` - Pricing €4.50→€4.00 (commission_rate 0.471→0.405, payout stays €2.38); apply immediately AFTER the corresponding app deploy
+13. `supabase/migrations/011-advisor-hardening.sql` - Pins search_path on all functions; revokes public EXECUTE on SECURITY DEFINER trigger functions; is_admin restricted to authenticated/service_role
 
 **Tables**: profiles, drivers, facilities, agencies, orders, transactions, notifications, push_subscriptions
 
@@ -208,6 +211,9 @@ Brand colors available as Tailwind classes:
 - Login/callback redirects to role-specific dashboard
 - Dashboard checks for role record (driver/facility); redirects to onboarding if missing
 - Header component has profile dropdown with logout (all roles)
+- **Password reset**: `/forgot-password` → `requestPasswordReset()` → email link → `/auth/callback?next=/reset-password` → `/reset-password` → `updatePassword()`. Both auth callback routes honor a same-origin `next` param.
+- **Resend confirmation**: "Email not confirmed" login error shows a resend button (`resendConfirmation()`); both actions return generic success (no account enumeration)
+- Verification-link errors on login say the link may already be used (email scanners pre-consume one-time links) and to just sign in
 
 ### Server Actions
 - All data mutations use `"use server"` actions in `lib/*/actions.ts`
@@ -216,8 +222,9 @@ Brand colors available as Tailwind classes:
 - `revalidatePath` used after writes to update server-rendered pages
 
 ### Stripe / Payments
-- Single service model: "Clean Delivery Bag" at €4.50 (`PRICING.bagClean`)
-- Commission stored per facility (`commission_rate`); default 0.471 (CleanBag keeps €2.12)
+- Single service model: "Clean Delivery Bag" at €4.00 (`PRICING.bagClean`)
+- Commission stored per facility (`commission_rate`); default 0.405 (CleanBag keeps €1.62, facility earns €2.38)
+- Pricing history: €4.50 / rate 0.471 until 2026-06-12 (migration 010); commission is snapshotted into PI metadata + order row at `initiatePayment`, so historical orders keep their original amounts
 - Driver pays upfront at booking — two-step flow: `initiatePayment()` creates Stripe PaymentIntent (no order in DB yet), returns `clientSecret`; after payment succeeds, `confirmOrder()` creates the order with `payment_status: "paid"`
 - Booking form is two-step: service summary → PaymentElement (Stripe) → order created on success
 - Webhook `payment_intent.succeeded` acts as safety net: creates order from PI metadata if `confirmOrder` didn't run (e.g., driver closed browser)
@@ -228,7 +235,10 @@ Brand colors available as Tailwind classes:
 - Connected state requires all three: `detailsSubmitted` + `chargesEnabled` + `payoutsEnabled`
 - **Payment gate**: `acceptOrder()`, `startOrder()`, `completeOrder()` all check `payment_status === "paid"` before allowing the action — prevents facilities from processing unpaid orders
 - Transfers to facility on order completion via `completeOrder()`
-- Webhook at `/api/webhooks/stripe` handles `payment_intent.succeeded` and `account.updated`
+- Webhook at `/api/webhooks/stripe` handles `payment_intent.succeeded`, `account.updated`, and `charge.refunded` (full refunds set `payment_status: "refunded"`, which the payment gate then blocks)
+- Webhook returns **500** on order-insert/update failures so Stripe retries (~3 days); duplicate-PI inserts (23505) are treated as success
+- Order completion is atomic via the `complete_order()` Postgres function (migration 009): status-gated update + 3 transaction rows + driver/facility counters in one transaction; the Stripe transfer runs after, with `source_transaction` + idempotency key `transfer-${orderId}`; transfer failure marks the payout transaction `failed` (visible on admin transactions)
+- `orders.stripe_payment_intent_id` has a partial unique index (migration 009) — one order per PaymentIntent, race-proof
 - Stripe client is `null` if `STRIPE_SECRET_KEY` is not set — code gracefully degrades
 - Service role client (`createServiceRoleClient()`) used in webhooks to bypass RLS
 - Test locally: `stripe listen --forward-to localhost:3000/api/webhooks/stripe`
@@ -310,8 +320,8 @@ Brand colors available as Tailwind classes:
 - [x] Removed Kyrenia from cities (operating in southern Cyprus only: Nicosia, Limassol, Larnaca, Paphos, Famagusta)
 
 ### Sprint 5: Payments (Stripe) ✅ COMPLETE
-- [x] Pricing simplification: 3 tiers → single service ("Clean Delivery Bag" at €4.50)
-- [x] Commission model: per-facility `commission_rate` (default 0.471 = CleanBag keeps €2.12)
+- [x] Pricing simplification: 3 tiers → single service ("Clean Delivery Bag" at €4.50; repriced to €4.00 on 2026-06-12, migration 010)
+- [x] Commission model: per-facility `commission_rate` (default 0.471 = CleanBag keeps €2.12; now 0.405 = €1.62, payout unchanged at €2.38)
 - [x] Stripe server client (`lib/stripe/client.ts`) with conditional initialization
 - [x] Stripe server actions: Connect account creation, refunds, account status
 - [x] Driver upfront payment: PaymentIntent created on booking, PaymentElement in booking form

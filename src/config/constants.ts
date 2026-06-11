@@ -5,12 +5,13 @@ export const APP_CONFIG = {
 } as const;
 
 export const PRICING = {
-  bagClean: 4.5,
+  bagClean: 4.0,
   currency: "€",
 } as const;
 
+// Facility payout is fixed at €2.38 per cleaning: 4.00 × (1 − 0.405) = 2.38
 export const COMMISSION_RATES = {
-  default: 0.471,
+  default: 0.405,
 } as const;
 
 export const SERVICE_TYPES = {

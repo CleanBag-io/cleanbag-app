@@ -58,7 +58,7 @@ export default function TermsPage() {
         <section>
           <h2 className="text-xl font-semibold text-gray-900">5. Pricing and Payments</h2>
           <p className="mt-3">
-            The current price for a delivery bag cleaning service is <strong>&euro;4.50</strong> per clean. Prices are displayed before booking and may be updated with reasonable notice.
+            The current price for a delivery bag cleaning service is <strong>&euro;4.00</strong> per clean. Prices are displayed before booking and may be updated with reasonable notice.
           </p>
           <p className="mt-3">
             All payments are processed securely through <strong>Stripe</strong>. CleanBag does not store your payment card details. By making a payment, you agree to Stripe&apos;s terms of service.

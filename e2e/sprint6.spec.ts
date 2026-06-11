@@ -939,9 +939,9 @@ async function seedTestOrder() {
       service_type: "standard",
       status: "in_progress",
       payment_status: "paid",
-      base_price: 4.5,
-      total_price: 4.5,
-      commission_amount: 2.12,
+      base_price: 4.0,
+      total_price: 4.0,
+      commission_amount: 1.62,
       accepted_at: new Date().toISOString(),
       started_at: new Date().toISOString(),
     })
@@ -1604,9 +1604,9 @@ test.describe.serial("15. PWA & Notifications", () => {
         service_type: "standard",
         status: "pending",
         payment_status: "paid",
-        base_price: 4.5,
-        total_price: 4.5,
-        commission_amount: 2.12,
+        base_price: 4.0,
+        total_price: 4.0,
+        commission_amount: 1.62,
       })
       .select("id")
       .single();
@@ -2164,9 +2164,9 @@ test.describe.serial("17. Payment Gate", () => {
         service_type: "standard",
         status: "pending",
         payment_status: "pending",
-        base_price: 4.5,
-        total_price: 4.5,
-        commission_amount: 2.12,
+        base_price: 4.0,
+        total_price: 4.0,
+        commission_amount: 1.62,
       })
       .select("id")
       .single();
@@ -2282,9 +2282,9 @@ test.describe.serial("17. Payment Gate", () => {
         service_type: "standard",
         status: "accepted",
         payment_status: "pending",
-        base_price: 4.5,
-        total_price: 4.5,
-        commission_amount: 2.12,
+        base_price: 4.0,
+        total_price: 4.0,
+        commission_amount: 1.62,
         accepted_at: new Date().toISOString(),
       })
       .select("id")
@@ -2588,7 +2588,7 @@ test.describe.serial("18. Booking & Payment Flow", () => {
 
     // Order summary visible
     await expect(page.locator("h3:has-text('Order Summary')")).toBeVisible();
-    await expect(page.locator("text=€4.50").first()).toBeVisible();
+    await expect(page.locator("text=€4.00").first()).toBeVisible();
 
     // Book & Pay button visible
     const bookBtn = page.locator("button:has-text('Book & Pay')");
@@ -2618,7 +2618,7 @@ test.describe.serial("18. Booking & Payment Flow", () => {
 
     // Payment summary still visible in payment step
     await expect(page.locator("text=Clean Delivery Bag").first()).toBeVisible();
-    await expect(page.locator("text=€4.50").first()).toBeVisible();
+    await expect(page.locator("text=€4.00").first()).toBeVisible();
 
     // Verify NO new order was created in the database
     const { count: afterCount } = await supabaseAdmin
@@ -2660,12 +2660,12 @@ test.describe.serial("18. Booking & Payment Flow", () => {
         service_type: "standard",
         status: "pending",
         payment_status: "paid",
-        base_price: 4.5,
-        total_price: 4.5,
-        commission_amount: 2.12,
+        base_price: 4.0,
+        total_price: 4.0,
+        commission_amount: 1.62,
         stripe_payment_intent_id: "pi_e2e_test_18e",
       })
-      .select("id, payment_status, stripe_payment_intent_id")
+      .select("id, payment_status, stripe_payment_intent_id, order_number")
       .single();
 
     expect(error).toBeNull();
@@ -2674,7 +2674,8 @@ test.describe.serial("18. Booking & Payment Flow", () => {
 
     // Clean up
     await supabaseAdmin.from("transactions").delete().eq("order_id", order!.id);
-    await supabaseAdmin.from("notifications").delete().ilike("message", `%${order!.order_number || ""}%`);
+    if (!order!.order_number) throw new Error("order_number missing — refusing unscoped notification delete");
+    await supabaseAdmin.from("notifications").delete().ilike("message", `%${order!.order_number}%`);
     await supabaseAdmin.from("orders").delete().eq("id", order!.id);
   });
 
@@ -2688,9 +2689,9 @@ test.describe.serial("18. Booking & Payment Flow", () => {
         service_type: "standard",
         status: "pending",
         payment_status: "paid",
-        base_price: 4.5,
-        total_price: 4.5,
-        commission_amount: 2.12,
+        base_price: 4.0,
+        total_price: 4.0,
+        commission_amount: 1.62,
         stripe_payment_intent_id: "pi_e2e_test_18f",
       })
       .select("id, order_number")
@@ -2711,6 +2712,7 @@ test.describe.serial("18. Booking & Payment Flow", () => {
 
     // Clean up
     await supabaseAdmin.from("transactions").delete().eq("order_id", order!.id);
+    if (!order!.order_number) throw new Error("order_number missing — refusing unscoped notification delete");
     await supabaseAdmin.from("notifications").delete().ilike("message", `%${order!.order_number}%`);
     await supabaseAdmin.from("orders").delete().eq("id", order!.id);
   });
@@ -2725,9 +2727,9 @@ test.describe.serial("18. Booking & Payment Flow", () => {
         service_type: "standard",
         status: "pending",
         payment_status: "paid",
-        base_price: 4.5,
-        total_price: 4.5,
-        commission_amount: 2.12,
+        base_price: 4.0,
+        total_price: 4.0,
+        commission_amount: 1.62,
         stripe_payment_intent_id: "pi_e2e_test_18g",
       })
       .select("id, order_number")
@@ -2810,6 +2812,7 @@ test.describe.serial("18. Booking & Payment Flow", () => {
 
     // Clean up order, transactions, notifications
     await supabaseAdmin.from("transactions").delete().eq("order_id", orderId);
+    if (!order!.order_number) throw new Error("order_number missing — refusing unscoped notification delete");
     await supabaseAdmin.from("notifications").delete().ilike("message", `%${order!.order_number}%`);
     await supabaseAdmin.from("orders").delete().eq("id", orderId);
   });

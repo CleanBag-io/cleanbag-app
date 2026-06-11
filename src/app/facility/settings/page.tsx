@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { getCurrentFacility, getFacilityStats } from "@/lib/facility/actions";
 import { getUser } from "@/lib/auth/actions";
 import { formatCurrency } from "@/lib/utils";
-import { PRICING } from "@/config/constants";
+import { PRICING, COMMISSION_RATES } from "@/config/constants";
 import { StripeConnectSection } from "./stripe-connect";
 import { FacilityProfileForm } from "./profile-form";
 import { ChangePasswordForm } from "@/components/change-password-form";
@@ -80,7 +80,7 @@ export default async function FacilitySettingsPage() {
         </div>
         <div className="mt-4 p-4 bg-brand-pink-light rounded-lg">
           <p className="text-sm font-medium text-gray-900">
-            You earn {formatCurrency(PRICING.bagClean * (1 - (facility?.commission_rate || 0.471)))} per cleaning
+            You earn {formatCurrency(PRICING.bagClean * (1 - (facility?.commission_rate || COMMISSION_RATES.default)))} per cleaning
           </p>
           <p className="text-xs text-gray-500 mt-1">
             Driver pays {formatCurrency(PRICING.bagClean)} — CleanBag platform fee is deducted automatically
@@ -116,7 +116,7 @@ export default async function FacilitySettingsPage() {
           <div>
             <p className="text-sm text-gray-500">Payout per Clean</p>
             <p className="text-2xl font-bold text-gray-900">
-              {formatCurrency(PRICING.bagClean * (1 - (facility?.commission_rate || 0.471)))}
+              {formatCurrency(PRICING.bagClean * (1 - (facility?.commission_rate || COMMISSION_RATES.default)))}
             </p>
           </div>
         </div>

@@ -179,7 +179,7 @@ export default function FacilityOnboardingPage() {
 
                 <div className="p-4 bg-brand-pink-light rounded-lg">
                   <p className="text-sm text-gray-700">
-                    <span className="font-medium">Default service:</span> Clean Delivery Bag at €4.50. You earn €2.38 per cleaning.
+                    <span className="font-medium">Default service:</span> Clean Delivery Bag at €4.00. You earn €2.38 per cleaning.
                   </p>
                 </div>
               </div>

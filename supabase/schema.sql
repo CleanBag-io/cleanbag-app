@@ -48,10 +48,10 @@ CREATE TABLE IF NOT EXISTS public.facilities (
   longitude DECIMAL(11, 8),
   phone TEXT,
   operating_hours JSONB DEFAULT '{}',
-  services JSONB NOT NULL DEFAULT '[{"type": "standard", "price": 4.50, "duration": 20}]',
+  services JSONB NOT NULL DEFAULT '[{"type": "standard", "price": 4.00, "duration": 20}]',
   rating DECIMAL(2, 1) NOT NULL DEFAULT 0.0,
   total_orders INTEGER NOT NULL DEFAULT 0,
-  commission_rate DECIMAL(4, 3) NOT NULL DEFAULT 0.471,
+  commission_rate DECIMAL(4, 3) NOT NULL DEFAULT 0.405,
   stripe_account_id TEXT,
   is_active BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

@@ -48,7 +48,7 @@ export async function createFacility(formData: FormData): Promise<ActionResult> 
 
   // Create facility with default service
   const defaultServices = [
-    { type: "standard", price: 4.5, duration: 20 },
+    { type: "standard", price: 4.0, duration: 20 },
   ];
 
   // Geocode address to lat/lng
@@ -250,16 +250,26 @@ export async function acceptOrder(orderId: string): Promise<ActionResult> {
     return { error: "Only pending orders can be accepted" };
   }
 
-  const { error } = await supabase
+  // Compare-and-set: status predicate makes concurrent accepts race-safe
+  const { data: accepted, error } = await supabase
     .from("orders")
     .update({
       status: "accepted",
       accepted_at: new Date().toISOString(),
     })
-    .eq("id", orderId);
+    .eq("id", orderId)
+    .eq("facility_id", facility.id)
+    .eq("status", "pending")
+    .eq("payment_status", "paid")
+    .select("id")
+    .maybeSingle();
 
   if (error) {
     return { error: error.message };
+  }
+
+  if (!accepted) {
+    return { error: "Only pending orders can be accepted" };
   }
 
   // Notify the driver
@@ -326,16 +336,26 @@ export async function startOrder(orderId: string): Promise<ActionResult> {
     return { error: "Only accepted orders can be started" };
   }
 
-  const { error } = await supabase
+  // Compare-and-set: status predicate makes concurrent starts race-safe
+  const { data: started, error } = await supabase
     .from("orders")
     .update({
       status: "in_progress",
       started_at: new Date().toISOString(),
     })
-    .eq("id", orderId);
+    .eq("id", orderId)
+    .eq("facility_id", facility.id)
+    .eq("status", "accepted")
+    .eq("payment_status", "paid")
+    .select("id")
+    .maybeSingle();
 
   if (error) {
     return { error: error.message };
+  }
+
+  if (!started) {
+    return { error: "Only accepted orders can be started" };
   }
 
   // Notify the driver
@@ -374,7 +394,7 @@ export async function completeOrder(orderId: string): Promise<ActionResult> {
   // Get facility
   const { data: facility } = await supabase
     .from("facilities")
-    .select("id, total_orders, stripe_account_id")
+    .select("id, stripe_account_id")
     .eq("user_id", user.id)
     .single();
 
@@ -382,10 +402,10 @@ export async function completeOrder(orderId: string): Promise<ActionResult> {
     return { error: "Facility not found" };
   }
 
-  // Verify order belongs to this facility and is in progress
+  // Pre-check for friendly error messages (the RPC re-checks atomically)
   const { data: order } = await supabase
     .from("orders")
-    .select("status, payment_status, driver_id, base_price, commission_amount, stripe_payment_intent_id, order_number")
+    .select("status, payment_status")
     .eq("id", orderId)
     .eq("facility_id", facility.id)
     .single();
@@ -402,108 +422,78 @@ export async function completeOrder(orderId: string): Promise<ActionResult> {
     return { error: "Only in-progress orders can be completed" };
   }
 
-  const now = new Date().toISOString();
+  // Atomic completion: status-gated order update + transaction records +
+  // driver compliance + facility counter in one DB transaction (migration 009).
+  // The status predicate inside the RPC means only one of two concurrent
+  // completions wins; the loser gets ORDER_NOT_COMPLETABLE.
+  const serviceClient = createServiceRoleClient();
+  const { data: completed, error: rpcError } = await serviceClient.rpc("complete_order", {
+    p_order_id: orderId,
+    p_facility_id: facility.id,
+  });
 
-  // Update order status (payment_status already set to 'paid' by webhook on upfront payment)
-  const { error: orderError } = await supabase
-    .from("orders")
-    .update({
-      status: "completed",
-      completed_at: now,
-    })
-    .eq("id", orderId);
-
-  if (orderError) {
-    return { error: orderError.message };
+  if (rpcError) {
+    if (rpcError.message.includes("ORDER_NOT_COMPLETABLE")) {
+      return { error: "Only in-progress orders can be completed" };
+    }
+    return { error: rpcError.message };
   }
 
-  // Calculate payout (base_price - commission)
-  const payoutAmount = Math.round((order.base_price - order.commission_amount) * 100); // cents
-
-  // Create Stripe transfer if facility has connected account and order was paid
-  let stripeTransferId: string | null = null;
-  const txStatus = facility.stripe_account_id && order.stripe_payment_intent_id ? "completed" : "pending";
-
-  if (facility.stripe_account_id && order.stripe_payment_intent_id && stripe) {
+  // Stripe transfer AFTER the committed transaction — payout row starts
+  // 'pending' and is flipped to 'completed'/'failed' based on the real outcome.
+  if (facility.stripe_account_id && completed.stripe_payment_intent_id && stripe) {
+    const payoutAmount = Math.round((completed.base_price - completed.commission_amount) * 100); // cents
     try {
-      const transfer = await stripe.transfers.create({
-        amount: payoutAmount,
-        currency: "eur",
-        destination: facility.stripe_account_id,
-        transfer_group: orderId,
-      });
-      stripeTransferId = transfer.id;
+      const paymentIntent = await stripe.paymentIntents.retrieve(completed.stripe_payment_intent_id);
+      const chargeId =
+        typeof paymentIntent.latest_charge === "string"
+          ? paymentIntent.latest_charge
+          : paymentIntent.latest_charge?.id;
+
+      const transfer = await stripe.transfers.create(
+        {
+          amount: payoutAmount,
+          currency: "eur",
+          destination: facility.stripe_account_id,
+          // Draw from this order's charge (settles even while platform balance is pending)
+          ...(chargeId ? { source_transaction: chargeId } : {}),
+          transfer_group: orderId,
+        },
+        { idempotencyKey: `transfer-${orderId}` }
+      );
+
+      const { error: payoutUpdateError } = await serviceClient
+        .from("transactions")
+        .update({ status: "completed", stripe_transfer_id: transfer.id })
+        .eq("order_id", orderId)
+        .eq("type", "payout");
+      if (payoutUpdateError) {
+        console.error("completeOrder: failed to record transfer", transfer.id, payoutUpdateError);
+      }
     } catch (err) {
-      console.error("Stripe transfer failed:", err);
-      // Continue — transactions recorded as pending
+      console.error("Stripe transfer failed for order", orderId, err);
+      await serviceClient
+        .from("transactions")
+        .update({ status: "failed" })
+        .eq("order_id", orderId)
+        .eq("type", "payout");
+      // Do not fail the completion — the driver's order is done; the payout
+      // shows as 'failed' on the admin transactions page for follow-up.
     }
   }
-
-  // Insert transaction records
-  await supabase.from("transactions").insert([
-    {
-      order_id: orderId,
-      facility_id: facility.id,
-      type: "order_payment",
-      amount: order.base_price,
-      status: txStatus,
-    },
-    {
-      order_id: orderId,
-      facility_id: facility.id,
-      type: "commission",
-      amount: order.commission_amount,
-      status: txStatus,
-    },
-    {
-      order_id: orderId,
-      facility_id: facility.id,
-      type: "payout",
-      amount: order.base_price - order.commission_amount,
-      status: txStatus,
-      stripe_transfer_id: stripeTransferId,
-    },
-  ]);
-
-  // Update driver's last cleaning date and total cleanings
-  // Uses service role to bypass RLS (facility user can't update drivers table directly)
-  // compliance_status is auto-computed by the check_driver_compliance trigger
-  const serviceClient = createServiceRoleClient();
-
-  const { data: driver } = await serviceClient
-    .from("drivers")
-    .select("total_cleanings")
-    .eq("id", order.driver_id)
-    .single();
-
-  await serviceClient
-    .from("drivers")
-    .update({
-      last_cleaning_date: now,
-      total_cleanings: (driver?.total_cleanings || 0) + 1,
-    })
-    .eq("id", order.driver_id);
-
-  // Update facility total orders
-  await supabase
-    .from("facilities")
-    .update({
-      total_orders: (facility.total_orders || 0) + 1,
-    })
-    .eq("id", facility.id);
 
   // Notify the driver that their order is complete
   const { data: completeDriver } = await serviceClient
     .from("drivers")
     .select("user_id")
-    .eq("id", order.driver_id)
+    .eq("id", completed.driver_id)
     .single();
 
   if (completeDriver) {
     await createNotification({
       userId: completeDriver.user_id,
       title: "Cleaning Complete",
-      message: `Your bag cleaning #${order.order_number} is done! You can now rate the service.`,
+      message: `Your bag cleaning #${completed.order_number} is done! You can now rate the service.`,
       type: "order",
       data: { url: `/driver/orders/${orderId}` },
     });

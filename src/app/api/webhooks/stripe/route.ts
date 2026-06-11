@@ -55,10 +55,15 @@ export async function POST(request: NextRequest) {
       if (existingOrder) {
         // Order exists — ensure payment_status is "paid"
         if (existingOrder.payment_status !== "paid") {
-          await supabase
+          const { error } = await supabase
             .from("orders")
             .update({ payment_status: "paid" })
             .eq("id", existingOrder.id);
+          if (error) {
+            console.error("Webhook: failed to mark order paid:", error);
+            // Non-2xx → Stripe retries (up to ~3 days)
+            return NextResponse.json({ error: "Failed to update order" }, { status: 500 });
+          }
         }
       } else if (meta.driver_id && meta.facility_id) {
         // Safety net: order not yet created (driver closed browser before confirmOrder ran)
@@ -80,7 +85,12 @@ export async function POST(request: NextRequest) {
           .single();
 
         if (error) {
-          console.error("Webhook: failed to create order from PI metadata:", error);
+          // Unique index (migration 009): concurrent confirmOrder won the race — fine.
+          if (error.code !== "23505") {
+            console.error("Webhook: failed to create order from PI metadata:", error);
+            // Non-2xx → Stripe retries; a charged driver must not end up with no order
+            return NextResponse.json({ error: "Order creation failed" }, { status: 500 });
+          }
         } else if (order && meta.facility_user_id) {
           await createNotification({
             userId: meta.facility_user_id,
@@ -89,6 +99,32 @@ export async function POST(request: NextRequest) {
             type: "order",
             data: { url: "/facility/orders" },
           });
+        }
+      }
+      break;
+    }
+
+    case "charge.refunded": {
+      // Manual refunds from the Stripe Dashboard (or any full refund) must be
+      // reflected here, or the facility could still process the refunded order.
+      // The payment gate (payment_status === "paid") then blocks accept/start/complete.
+      const charge = event.data.object as Stripe.Charge;
+      if (!charge.refunded) break; // only fully refunded charges
+
+      const piId =
+        typeof charge.payment_intent === "string"
+          ? charge.payment_intent
+          : charge.payment_intent?.id;
+
+      if (piId) {
+        const { error } = await supabase
+          .from("orders")
+          .update({ payment_status: "refunded" })
+          .eq("stripe_payment_intent_id", piId)
+          .neq("payment_status", "refunded");
+        if (error) {
+          console.error("Webhook: failed to mark order refunded:", error);
+          return NextResponse.json({ error: "Failed to mark refunded" }, { status: 500 });
         }
       }
       break;

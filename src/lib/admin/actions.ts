@@ -323,7 +323,7 @@ export async function createFacilityAccount(data: {
   const userId = authData.user.id;
 
   // Insert facility record
-  const defaultServices = [{ type: "standard", price: 4.5, duration: 20 }];
+  const defaultServices = [{ type: "standard", price: 4.0, duration: 20 }];
 
   // Geocode address to lat/lng
   const coords = await geocodeAddress(address, city);

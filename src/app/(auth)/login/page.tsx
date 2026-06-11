@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState, useTransition } from "react";
-import { login } from "@/lib/auth/actions";
+import { login, resendConfirmation } from "@/lib/auth/actions";
 import { Button } from "@/components/ui/button";
 import { Input, PasswordInput, Label, InputError } from "@/components/ui/input";
 
@@ -12,15 +12,29 @@ function LoginForm() {
   const redirect = searchParams.get("redirect");
   const error_param = searchParams.get("error");
   const [error, setError] = useState<string | null>(null);
+  const [lastEmail, setLastEmail] = useState<string | null>(null);
+  const [resent, setResent] = useState(false);
   const [isPending, startTransition] = useTransition();
+
+  const isUnconfirmed = error?.toLowerCase().includes("email not confirmed");
 
   async function handleSubmit(formData: FormData) {
     setError(null);
+    setResent(false);
+    setLastEmail(formData.get("email") as string);
     startTransition(async () => {
       const result = await login(formData);
       if (result?.error) {
         setError(result.error);
       }
+    });
+  }
+
+  function handleResend() {
+    if (!lastEmail) return;
+    startTransition(async () => {
+      await resendConfirmation(lastEmail);
+      setResent(true);
     });
   }
 
@@ -34,11 +48,9 @@ function LoginForm() {
 
       {error_param && (
         <div className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">
-          {error_param === "auth_callback_error"
-            ? "Failed to verify your email. Please try again."
-            : error_param === "verification_failed"
-              ? "Email verification failed. Please try again."
-              : "An error occurred. Please try again."}
+          {error_param === "auth_callback_error" || error_param === "verification_failed"
+            ? "That verification link was already used or has expired. Your email may already be verified — try signing in below."
+            : "An error occurred. Please try again."}
         </div>
       )}
 
@@ -71,7 +83,36 @@ function LoginForm() {
           />
         </div>
 
-        {error && <InputError>{error}</InputError>}
+        {error && (
+          <div>
+            <InputError>{error}</InputError>
+            {isUnconfirmed && !resent && (
+              <button
+                type="button"
+                onClick={handleResend}
+                disabled={isPending}
+                className="mt-1 text-sm font-medium text-brand-pink hover:text-brand-pink-dark"
+              >
+                Resend confirmation email
+              </button>
+            )}
+            {isUnconfirmed && resent && (
+              <p className="mt-1 text-sm text-green-700">
+                Confirmation email sent — check your inbox (and spam) for
+                noreply@cleanbag.io.
+              </p>
+            )}
+          </div>
+        )}
+
+        <div className="text-right">
+          <Link
+            href="/forgot-password"
+            className="text-sm font-medium text-brand-pink hover:text-brand-pink-dark"
+          >
+            Forgot password?
+          </Link>
+        </div>
 
         <Button type="submit" fullWidth disabled={isPending}>
           {isPending ? "Signing in..." : "Sign in"}

@@ -17,6 +17,11 @@ export async function GET(request: Request) {
     });
 
     if (!error && data.user) {
+      // Honor an explicit same-origin next path (e.g. /reset-password for recovery links)
+      if (next.startsWith("/") && !next.startsWith("//") && next !== "/") {
+        return NextResponse.redirect(`${origin}${next}`);
+      }
+
       // Get user's role from profile to determine redirect
       const { data: profile } = await supabase
         .from("profiles")

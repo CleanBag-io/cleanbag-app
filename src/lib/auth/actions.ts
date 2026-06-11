@@ -113,6 +113,89 @@ export async function register(formData: FormData): Promise<AuthResult> {
   return { success: true };
 }
 
+// Send a password-reset email. Always returns success (no account enumeration).
+export async function requestPasswordReset(formData: FormData): Promise<AuthResult> {
+  const supabase = await createClient();
+
+  const email = formData.get("email") as string;
+
+  if (!email) {
+    return { error: "Email is required" };
+  }
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${siteUrl}/auth/callback?next=/reset-password`,
+  });
+
+  if (error) {
+    // Rate limits etc. — surface generic guidance, never reveal account existence
+    console.error("requestPasswordReset:", error.message);
+  }
+
+  return { success: true };
+}
+
+// Re-send the signup confirmation email. Always returns success (no enumeration).
+export async function resendConfirmation(email: string): Promise<AuthResult> {
+  const supabase = await createClient();
+
+  if (!email) {
+    return { error: "Email is required" };
+  }
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+  const { error } = await supabase.auth.resend({
+    type: "signup",
+    email,
+    options: {
+      emailRedirectTo: `${siteUrl}/auth/callback`,
+    },
+  });
+
+  if (error) {
+    console.error("resendConfirmation:", error.message);
+  }
+
+  return { success: true };
+}
+
+// Set a new password for the recovery session created by the reset link.
+export async function updatePassword(formData: FormData): Promise<AuthResult> {
+  const supabase = await createClient();
+
+  const password = formData.get("password") as string;
+  const confirmPassword = formData.get("confirmPassword") as string;
+
+  if (!password || !confirmPassword) {
+    return { error: "All fields are required" };
+  }
+
+  if (password.length < 6) {
+    return { error: "Password must be at least 6 characters" };
+  }
+
+  if (password !== confirmPassword) {
+    return { error: "Passwords do not match" };
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Your reset link has expired. Please request a new one." };
+  }
+
+  const { error } = await supabase.auth.updateUser({ password });
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  return { success: true };
+}
+
 export async function logout(): Promise<void> {
   const supabase = await createClient();
 

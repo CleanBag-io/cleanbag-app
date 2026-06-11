@@ -199,8 +199,14 @@ export async function initiatePayment(
   const commissionAmount = Math.round(basePrice * commissionRate * 100) / 100;
   const totalPrice = basePrice;
 
-  // No Stripe configured (local dev) — create order directly
+  // No Stripe configured (local dev) — create order directly.
+  // Never allowed in production: a missing STRIPE_SECRET_KEY must fail loudly
+  // instead of silently creating unpayable orders.
   if (!stripe) {
+    if (process.env.NODE_ENV === "production") {
+      console.error("initiatePayment: STRIPE_SECRET_KEY missing in production");
+      return { error: "Payments are temporarily unavailable. Please try again later." };
+    }
     const { data: order, error } = await supabase
       .from("orders")
       .insert({
@@ -338,6 +344,18 @@ export async function confirmOrder(
     .single();
 
   if (error) {
+    // Unique index on stripe_payment_intent_id (migration 009): a concurrent
+    // webhook insert won the race — fetch and return that order instead.
+    if (error.code === "23505") {
+      const { data: raceWinner } = await serviceClient
+        .from("orders")
+        .select("*")
+        .eq("stripe_payment_intent_id", paymentIntentId)
+        .maybeSingle();
+      if (raceWinner) {
+        return { data: raceWinner };
+      }
+    }
     console.error("confirmOrder: failed to insert order:", error);
     return { error: "Failed to create order. Please contact support." };
   }
@@ -469,26 +487,47 @@ export async function cancelOrder(orderId: string): Promise<ActionResult> {
     return { error: "Only pending orders can be cancelled" };
   }
 
-  // If paid, issue Stripe refund
-  if (order.payment_status === "paid" && order.stripe_payment_intent_id) {
-    const refundResult = await createRefund(orderId);
-    if (refundResult.error) {
-      return { error: `Cancellation failed: ${refundResult.error}` };
-    }
-  }
-
-  const { error } = await supabase
+  // Compare-and-set cancel FIRST: wins the race against a concurrent facility
+  // accept (which requires status = 'pending'), so we never refund an order
+  // that just got accepted.
+  const { data: cancelled, error } = await supabase
     .from("orders")
     .update({
       status: "cancelled",
       cancelled_at: new Date().toISOString(),
       cancellation_reason: "Cancelled by driver",
-      payment_status: order.payment_status === "paid" ? "refunded" : order.payment_status,
     })
-    .eq("id", orderId);
+    .eq("id", orderId)
+    .eq("driver_id", driver.id)
+    .eq("status", "pending")
+    .select("id")
+    .maybeSingle();
 
   if (error) {
     return { error: error.message };
+  }
+
+  if (!cancelled) {
+    return { error: "Only pending orders can be cancelled" };
+  }
+
+  // If paid, issue Stripe refund; on failure revert the cancellation
+  if (order.payment_status === "paid" && order.stripe_payment_intent_id) {
+    const refundResult = await createRefund(orderId);
+    if (refundResult.error) {
+      await supabase
+        .from("orders")
+        .update({ status: "pending", cancelled_at: null, cancellation_reason: null })
+        .eq("id", orderId)
+        .eq("driver_id", driver.id)
+        .eq("status", "cancelled");
+      return { error: `Cancellation failed: ${refundResult.error}` };
+    }
+    await supabase
+      .from("orders")
+      .update({ payment_status: "refunded" })
+      .eq("id", orderId)
+      .eq("driver_id", driver.id);
   }
 
   // Notify the facility about the cancellation
@@ -532,15 +571,30 @@ export async function rateOrder(
     return { error: "Rating must be between 1 and 5" };
   }
 
-  // Get the order to find the facility
+  // Verify the order belongs to this driver and is completed
+  const { data: driver } = await supabase
+    .from("drivers")
+    .select("id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!driver) {
+    return { error: "Driver not found" };
+  }
+
   const { data: order } = await supabase
     .from("orders")
-    .select("facility_id")
+    .select("facility_id, status")
     .eq("id", orderId)
+    .eq("driver_id", driver.id)
     .single();
 
   if (!order) {
     return { error: "Order not found" };
+  }
+
+  if (order.status !== "completed") {
+    return { error: "Only completed orders can be rated" };
   }
 
   const { error } = await supabase
@@ -549,7 +603,8 @@ export async function rateOrder(
       rating,
       review: review || null,
     })
-    .eq("id", orderId);
+    .eq("id", orderId)
+    .eq("driver_id", driver.id);
 
   if (error) {
     return { error: error.message };

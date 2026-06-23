@@ -29,7 +29,8 @@ export default async function ProfilePage() {
       // Fetch pending requests and available companies
       const [reqResult, compResult] = await Promise.all([
         getMyRequests(),
-        getCompanies(driver.city),
+        // Companies can operate across cities, so drivers see all companies
+        getCompanies(),
       ]);
       requests = reqResult.data || [];
       availableCompanies = compResult.data || [];

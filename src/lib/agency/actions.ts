@@ -433,7 +433,7 @@ export async function removeDriver(driverId: string): Promise<ActionResult> {
 
 // Search unaffiliated drivers for invitation (filtered by city)
 export async function searchDrivers(
-  city?: City
+  city?: City | "all"
 ): Promise<ActionResult<(Driver & { profile: Profile })[]>> {
   const supabase = await createClient();
 
@@ -455,13 +455,18 @@ export async function searchDrivers(
     return { error: "Company not found" };
   }
 
-  const searchCity = city || agency.city;
-
-  const { data: drivers, error } = await supabase
+  // Companies can operate across cities. "all" searches every city; a specific
+  // city narrows the search; omitting it defaults to the company's own city.
+  let driverQuery = supabase
     .from("drivers")
     .select("*, profile:profiles(*)")
-    .is("agency_id", null)
-    .eq("city", searchCity);
+    .is("agency_id", null);
+
+  if (city !== "all") {
+    driverQuery = driverQuery.eq("city", city || agency.city);
+  }
+
+  const { data: drivers, error } = await driverQuery;
 
   if (error) {
     return { error: error.message };

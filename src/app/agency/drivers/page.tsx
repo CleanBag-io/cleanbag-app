@@ -17,7 +17,7 @@ export default async function AgencyDriversPage() {
   const [driversResult, requestsResult, searchResult] = await Promise.all([
     getAgencyDrivers(),
     getAgencyRequests("pending"),
-    searchDrivers(),
+    searchDrivers("all"),
   ]);
 
   return (

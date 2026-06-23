@@ -1,17 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Select, Label } from "@/components/ui/input";
 import type { Driver, Profile, AgencyRequest } from "@/types";
+import { CITIES, type City } from "@/config/constants";
 import { getRelativeTime } from "@/lib/utils";
 import {
   respondToRequest,
   cancelInvitation,
   removeDriver,
   sendInvitation,
+  searchDrivers,
 } from "@/lib/agency/actions";
 
 interface DriversClientProps {
@@ -29,6 +32,17 @@ export function DriversClient({
   const [activeTab, setActiveTab] = useState<"drivers" | "pending">("drivers");
   const [loading, setLoading] = useState<string | null>(null);
   const [showInvite, setShowInvite] = useState(false);
+  const [available, setAvailable] = useState(availableDrivers);
+  const [cityFilter, setCityFilter] = useState<City | "all">("all");
+  const [isSearching, startSearch] = useTransition();
+
+  const handleCityChange = (value: City | "all") => {
+    setCityFilter(value);
+    startSearch(async () => {
+      const result = await searchDrivers(value);
+      setAvailable(result.data || []);
+    });
+  };
 
   const complianceStatusMap = {
     compliant: { label: "Compliant", variant: "success" as const },
@@ -70,6 +84,8 @@ export function DriversClient({
     setLoading(driverId);
     await sendInvitation(driverId);
     setLoading(null);
+    // Drop the invited driver from the available list immediately
+    setAvailable((prev) => prev.filter((d) => d.id !== driverId));
     router.refresh();
   };
 
@@ -89,9 +105,28 @@ export function DriversClient({
             <h3 className="font-semibold text-gray-900 mb-3">
               Invite a Driver
             </h3>
-            {availableDrivers.length > 0 ? (
+            <div className="mb-4">
+              <Label htmlFor="city_filter">Operating city</Label>
+              <Select
+                id="city_filter"
+                value={cityFilter}
+                onChange={(e) =>
+                  handleCityChange(e.target.value as City | "all")
+                }
+              >
+                <option value="all">All cities</option>
+                {CITIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            {isSearching ? (
+              <p className="text-sm text-gray-500">Searching...</p>
+            ) : available.length > 0 ? (
               <div className="space-y-2">
-                {availableDrivers.map((driver) => (
+                {available.map((driver) => (
                   <div
                     key={driver.id}
                     className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0"
@@ -118,7 +153,8 @@ export function DriversClient({
               </div>
             ) : (
               <p className="text-sm text-gray-500">
-                No unaffiliated drivers found in your city.
+                No unaffiliated drivers found
+                {cityFilter === "all" ? "" : ` in ${cityFilter}`}.
               </p>
             )}
           </CardContent>

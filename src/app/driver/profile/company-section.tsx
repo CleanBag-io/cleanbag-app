@@ -215,7 +215,7 @@ export function CompanySection({
               </>
             ) : (
               <p className="text-sm text-gray-400">
-                No companies available in your city yet.
+                No companies available yet.
               </p>
             )}
           </div>

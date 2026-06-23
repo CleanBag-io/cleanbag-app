@@ -158,9 +158,13 @@ VAPID_PRIVATE_KEY=your-vapid-private-key
 - **Redirect URLs**: `http://localhost:3000/**`, `https://cleanbag.io/**`, `https://*.vercel.app/**`
 - **Email confirmation**: Enabled in production (users must verify email to activate account)
 - **Custom SMTP**: Resend (`smtp.resend.com:465`, sender: `noreply@cleanbag.io`)
-- **Supabase plan**: Pro ($25/mo) — daily automated backups + point-in-time recovery
+- **Supabase plan**: Free as of 2026-06 (Pro upgrade pending) — NO automated backups or PITR until upgraded
 
 ## Database Setup
+Migrations are applied **manually in the Supabase SQL Editor** — there is no CLI/CI pipeline and `supabase_migrations.schema_migrations` is not tracked. Always save the SQL as the next-numbered file in `supabase/migrations/` so the repo stays the source of truth, and note any apply-ordering constraints in the file header (e.g. migration 010 had to run immediately AFTER its app deploy).
+
+Supabase plan: **Free** as of 2026-06 (Pro upgrade pending) — no automated backups or PITR until upgraded, so treat destructive SQL with extra care.
+
 Run these SQL files in Supabase SQL Editor (in order):
 1. `supabase/schema.sql` - Creates all tables, indexes, RLS policies, and triggers
 2. `supabase/fix-profiles-rls.sql` - Fixes admin RLS policy recursion issue
@@ -190,6 +194,11 @@ Run these SQL files in Supabase SQL Editor (in order):
 3. Register accounts at `/register` (select role: driver or facility)
 4. Each role redirects to its onboarding flow, then dashboard
 5. Optionally run `supabase/seed-test-data.sql` (replace UUIDs first) for sample orders
+
+### E2E safety & quirks
+- **The E2E suite runs against the production Supabase DB** (`.env.local` points at prod with the service-role key). Every `supabaseAdmin` query in `e2e/` is live-fire — scope all cleanup queries tightly. An unscoped notification delete wiped all production notifications on 2026-06-11 (fixed in 4a5da67); never use `|| ""` fallbacks in delete filters.
+- Known flake: test 14a (Google Maps) often fails on full runs but passes in isolation — verify with `npx playwright test -g "14\."` before treating as real.
+- pnpm 11 is pinned via `packageManager`; in non-TTY contexts run installs as `CI=true pnpm install`. If `pnpm <script>` fails its pre-run deps check, run the underlying binary directly (`./node_modules/.bin/next dev`, `npx playwright test`).
 
 ## Design Tokens (globals.css)
 Brand colors available as Tailwind classes:
